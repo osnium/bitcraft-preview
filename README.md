@@ -57,7 +57,15 @@ As long as your BitCraft clients are running (vanilla or inside Sandboxie Plus),
 
 ## Packaging into a Standalone `.exe`
 
-*Support for building via PyInstaller incoming.*
+We use **PyInstaller** to package the script.
+
+To generate a standalone executable bundle locally:
+```powershell
+pip install pyinstaller
+pyinstaller --noconsole --onedir -n BitCraftPreview bitcraft_preview\__main__.py
+```
+
+The resulting files will be generated in `dist/BitCraftPreview/`. You can copy the entire folder anywhere and distribute it. 
 
 ## License
 
