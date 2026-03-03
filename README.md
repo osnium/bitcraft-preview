@@ -67,6 +67,10 @@ pyinstaller --noconsole --onedir -n BitCraftPreview bitcraft_preview\__main__.py
 
 The resulting files will be generated in `dist/BitCraftPreview/`. You can copy the entire folder anywhere and distribute it. 
 
+## Support
+
+If you wan't to support this project, make sure to check out Bitbucht in R18 / Oryxen and have it prosper :)
+
 ## License
 
 This project is open-source. See `LICENSE` file for details.
