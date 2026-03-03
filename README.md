@@ -21,7 +21,7 @@ This project is built directly for Windows using pure DWM API and PySide6 for mi
 
 1. **Clone the repository**:
    ```powershell
-   git clone https://github.com/your-repo/bitcraft-preview.git
+   git clone https://github.com/osnium/bitcraft-preview.git
    cd bitcraft-preview
    ```
 
