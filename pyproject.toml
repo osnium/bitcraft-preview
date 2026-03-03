@@ -1,0 +1,15 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "bitcraft_preview"
+version = "0.1.0"
+description = "A preview tool for BitCraft"
+dependencies = [
+    "PySide6",
+    "psutil",
+]
+
+[project.scripts]
+bitcraft_preview = "bitcraft_preview.__main__:main"
