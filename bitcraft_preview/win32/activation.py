@@ -5,6 +5,9 @@ import time
 user32 = ctypes.windll.user32
 
 def activate_window(hwnd: int):
-    # Try restoring if minimized
-    user32.ShowWindowAsync(hwnd, 9) # 9 is SW_RESTORE
+    # Check if window is minimized
+    if user32.IsIconic(hwnd):
+        # 9 is SW_RESTORE
+        user32.ShowWindowAsync(hwnd, 9)
+    # Regardless of state, bring it to the foreground
     user32.SetForegroundWindow(hwnd)
