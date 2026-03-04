@@ -1,6 +1,6 @@
 # BitCraft Sandboxie Preview
 
-![Preview](https://i.ibb.co/9m8284H5/preview.gif)
+![Preview](preview.gif)
 
 A Windows-only utility to display **live DWM previews** of multiple BitCraft game clients running under Sandboxie Plus. It allows you to monitor all your running clients in a grid and quickly switch focus to a specific sandbox by simply clicking its preview tile.
 
