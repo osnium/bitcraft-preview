@@ -138,7 +138,7 @@ class LivePreviewTile(QWidget):
             event.accept()
 
 
-    #TODO fix the flickers when starting the zoom and the edgecase when Window is between 2 screens
+    #TODO fix the flickers when Window is between 2 screens
     def enterEvent(self, event):
         super().enterEvent(event)
         self.is_hovered = True
