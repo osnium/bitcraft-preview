@@ -98,6 +98,11 @@ class LivePreviewTile(QWidget):
             self.dragging = True
             self.drag_start_position = event.globalPosition().toPoint()
             self.window_start_position = self.frameGeometry().topLeft()
+            
+            if HOVER_ZOOM_ENABLED and self.zoomed_in:
+                self._unzoom()
+                self.window_start_position = self.frameGeometry().topLeft()
+
             event.accept()
 
     def mouseMoveEvent(self, event):
@@ -132,6 +137,8 @@ class LivePreviewTile(QWidget):
                 activate_window(self.target_hwnd)
             event.accept()
 
+
+    #TODO fix the flickers when starting the zoom and the edgecase when Window is between 2 screens
     def enterEvent(self, event):
         super().enterEvent(event)
         self.is_hovered = True
@@ -141,6 +148,9 @@ class LivePreviewTile(QWidget):
         if INLINE_LABEL and hasattr(self, 'label') and self.label:
             self.label.raise_()
         
+        if self.dragging:
+            return
+
         if HOVER_ZOOM_ENABLED and not self.zoomed_in:
             # Check if the mouse actually entered our *original* visible region and not just the overlap part
             # from another zoomed window. This prevents bouncing between two adjacent windows.
@@ -181,6 +191,18 @@ class LivePreviewTile(QWidget):
             if new_y + new_h > screen_geom.bottom():
                 new_y = screen_geom.bottom() - new_h
                 
+            # After clamping to screen bounds, ensure the mouse is still inside the new geometry
+            # to prevent immediate unzooming (flickering) if the window shifted away from the cursor.
+            if global_pos.x() < new_x:
+                new_x = global_pos.x()
+            elif global_pos.x() >= new_x + new_w:
+                new_x = global_pos.x() - new_w + 1
+                
+            if global_pos.y() < new_y:
+                new_y = global_pos.y()
+            elif global_pos.y() >= new_y + new_h:
+                new_y = global_pos.y() - new_h + 1
+                
             self.setGeometry(new_x, new_y, new_w, new_h)
             self.zoomed_in = True
 
@@ -201,12 +223,10 @@ class LivePreviewTile(QWidget):
         super().leaveEvent(event)
         
         # We only consider it a leave if the mouse actually left the zoomed window area.
-        # But wait, logic: if we are zoomed in, the window size is huge. The enterEvent logic above
-        # guarantees we don't zoom another window unless the mouse is inside its original unzoomed bounds.
-        # 
-        # But what if the mouse leaves the zoomed window geometry? It will fire leaveEvent.
-        # But for unzooming based on original rect, we handle that in mouseMoveEvent!
-        
+        # Avoid fake leave events triggered during resize/move if the mouse is still inside
+        if self.zoomed_in and self.geometry().contains(self.cursor().pos()):
+            return
+            
         self.is_hovered = False
         
         if HOVER_ZOOM_ENABLED:

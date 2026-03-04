@@ -10,10 +10,10 @@ LOG_FILE_NAME = "bitcraft_preview.log"
 INLINE_LABEL = True
 
 # Opacity level for the thumbnails and labels (range: 0.0 to 1.0)
-PREVIEW_OPACITY = 0.5
+PREVIEW_OPACITY = 0.8
 
 # Set to True to allow closing the app via CTRL+C in the console
-DEBUG = True
+DEBUG = False
 
 # Enable zooming the preview when hovering
 HOVER_ZOOM_ENABLED = True
@@ -22,4 +22,7 @@ HOVER_ZOOM_ENABLED = True
 HOVER_ZOOM_PERCENT = 200
 
 # Clamp zoom percentage to prevent extreme values from crashing the app
-HOVER_ZOOM_PERCENT = max(100, min(300, HOVER_ZOOM_PERCENT))
+HOVER_ZOOM_PERCENT = max(100, min(500, HOVER_ZOOM_PERCENT))
+
+# Hide the overlay corresponding to the currently active/focused game client
+HIDE_ACTIVE_WINDOW_OVERLAY = False
