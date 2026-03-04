@@ -30,19 +30,17 @@ def register_thumbnail(dest_hwnd: int, src_hwnd: int) -> int:
         pass
     return None
 
-def update_thumbnail(hthumb: int, dest_rect) -> None:
+def update_thumbnail(hthumb: int, dest_rect, opacity: int = 255) -> None:
     # dest_rect expects tuple (left, top, right, bottom)
     if hthumb:
         props = DWM_THUMBNAIL_PROPERTIES()
         props.dwFlags = DWM_TNP_VISIBLE | DWM_TNP_RECTDESTINATION | DWM_TNP_OPACITY
         props.fVisible = True
-        props.opacity = 255
-        
+        props.opacity = opacity
         props.rcDestination.left = dest_rect[0]
         props.rcDestination.top = dest_rect[1]
         props.rcDestination.right = dest_rect[2]
         props.rcDestination.bottom = dest_rect[3]
-        
         dwmapi.DwmUpdateThumbnailProperties(hthumb, ctypes.byref(props))
 
 def unregister_thumbnail(hthumb: int) -> None:
