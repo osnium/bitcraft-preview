@@ -4,7 +4,7 @@ from PySide6.QtGui import QPainterPath, QRegion, QPainter, QColor
 import ctypes
 from bitcraft_preview.win32.dwm_thumbnail import register_thumbnail, update_thumbnail, unregister_thumbnail
 from bitcraft_preview.win32.activation import activate_window
-from bitcraft_preview.config import INLINE_LABEL, get_preview_opacity, get_hover_zoom_enabled, get_hover_zoom_percent
+from bitcraft_preview.config import INLINE_LABEL, get_preview_opacity, get_hover_zoom_enabled, get_hover_zoom_percent, get_preview_tile_width, get_preview_tile_height
 
 class LivePreviewTile(QWidget):
     def __init__(self, target_hwnd: int, label_text: str, parent=None):
@@ -31,7 +31,7 @@ class LivePreviewTile(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMouseTracking(True) # REQUIRED trick to monitor mouse when leaving the inner unzoomed rect!
 
-        self.resize(300, 200) # Default size
+        self.resize(get_preview_tile_width(), get_preview_tile_height()) # Default size
         self.setup_ui()
         
     def setup_ui(self):
@@ -243,6 +243,15 @@ class LivePreviewTile(QWidget):
             # which is what move() on a parentless top-level window expects.
             bottom_left = self.mapToGlobal(QPoint(10, self.height() - self.label.height() - 10))
             self.label.move(bottom_left)
+
+    def sync_size(self):
+        """Called each refresh tick to apply live config size changes."""
+        if self.zoomed_in or self.dragging:
+            return
+        cfg_w = get_preview_tile_width()
+        cfg_h = get_preview_tile_height()
+        if self.width() != cfg_w or self.height() != cfg_h:
+            self.resize(cfg_w, cfg_h)
 
     def moveEvent(self, event):
         super().moveEvent(event)

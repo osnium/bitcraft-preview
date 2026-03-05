@@ -4,7 +4,7 @@ from PySide6.QtCore import QTimer
 import ctypes
 from bitcraft_preview.win32.window_discovery import enumerate_windows
 from bitcraft_preview.ui.tile import LivePreviewTile
-from bitcraft_preview.config import REFRESH_INTERVAL_MS, get_hide_active_window_overlay
+from bitcraft_preview.config import REFRESH_INTERVAL_MS, get_hide_active_window_overlay, get_preview_tile_width
 from bitcraft_preview.win32.title_parse import display_label
 import logging
 
@@ -43,7 +43,7 @@ class OverlayManager:
                 self.overlays[window.hwnd] = overlay
                 
                 # Default position (top-left offset)
-                offset = 50 + (len(self.overlays) - 1) * 300
+                offset = 50 + (len(self.overlays) - 1) * get_preview_tile_width()
                 overlay.move(offset, 50)
                 
                 logger.info(f"Added overlay for window {window.hwnd} [{label_text}]")
@@ -53,6 +53,7 @@ class OverlayManager:
                 if overlay.label_text != label_text:
                     overlay.label_text = label_text
                     overlay.label.setText(label_text)
+                overlay.sync_size()
 
             # Hide overlay if this client is active and config enables it
             if get_hide_active_window_overlay() and window.hwnd == active_hwnd:

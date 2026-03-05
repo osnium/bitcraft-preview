@@ -11,7 +11,9 @@ DEFAULT_CONFIG = {
         "preview_opacity": 0.8,               # Live
         "hover_zoom_enabled": True,           # Live
         "hover_zoom_percent": 200,            # Live (100-500)
-        "hide_active_window_overlay": False   # Live
+        "hide_active_window_overlay": False,  # Live
+        "preview_tile_width": 300,            # Live
+        "preview_tile_height": 200            # Live
     },
     "SystemSettings": {
         "warning": "Do not change these unless you know what you are doing!",
@@ -70,3 +72,5 @@ def get_preview_opacity(): return load_config()["UserSettings"]["preview_opacity
 def get_hover_zoom_enabled(): return load_config()["UserSettings"]["hover_zoom_enabled"]
 def get_hover_zoom_percent(): return load_config()["UserSettings"]["hover_zoom_percent"]
 def get_hide_active_window_overlay(): return load_config()["UserSettings"]["hide_active_window_overlay"]
+def get_preview_tile_width(): return max(100, int(load_config()["UserSettings"]["preview_tile_width"]))
+def get_preview_tile_height(): return max(60, int(load_config()["UserSettings"]["preview_tile_height"]))
