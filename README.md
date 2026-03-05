@@ -26,7 +26,8 @@ When the application runs for the first time, it will automatically generate a `
         "preview_opacity": 0.8,               // Live Update
         "hover_zoom_enabled": true,           // Live Update
         "hover_zoom_percent": 200,            // Live Update (100-500)
-        "hide_active_window_overlay": false   // Live Update
+            "hide_active_window_overlay": false,  // Live Update
+            "switch_window_hotkey": "MOUSE5"     // Live Update (examples: MOUSE5, F8, CTRL+ALT+TAB)
     },
     ...
 ```

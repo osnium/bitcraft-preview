@@ -4,8 +4,10 @@ from PySide6.QtCore import QTimer
 import ctypes
 from bitcraft_preview.win32.window_discovery import enumerate_windows
 from bitcraft_preview.ui.tile import LivePreviewTile
-from bitcraft_preview.config import REFRESH_INTERVAL_MS, get_hide_active_window_overlay, get_preview_tile_width
+from bitcraft_preview.config import REFRESH_INTERVAL_MS, get_hide_active_window_overlay, get_preview_tile_width, get_switch_window_hotkey
 from bitcraft_preview.win32.title_parse import display_label
+from bitcraft_preview.win32.activation import activate_window
+from bitcraft_preview.win32.hotkey_monitor import GlobalHotkeyMonitor
 import logging
 
 logger = logging.getLogger("bitcraft_preview")
@@ -14,6 +16,12 @@ user32 = ctypes.windll.user32
 class OverlayManager:
     def __init__(self):
         self.overlays = {}  # target_hwnd -> LivePreviewTile overlay
+        self.hotkey_monitor = GlobalHotkeyMonitor()
+        self._current_hotkey_spec = ""
+        self._last_switched_hwnd = None
+        # Always keep a valid binding to avoid a non-functional hotkey if config is malformed.
+        self.hotkey_monitor.set_hotkey("MOUSE5")
+        self._current_hotkey_spec = "MOUSE5"
         self.timer = QTimer()
         self.timer.timeout.connect(self.refresh_windows)
         self.timer.start(REFRESH_INTERVAL_MS)
@@ -22,8 +30,60 @@ class OverlayManager:
     def get_active_window(self):
         return user32.GetForegroundWindow()
 
+    def _refresh_hotkey_binding(self):
+        configured_spec = get_switch_window_hotkey().strip()
+        if not configured_spec:
+            configured_spec = "MOUSE5"
+
+        if configured_spec == self._current_hotkey_spec:
+            return
+
+        if self.hotkey_monitor.set_hotkey(configured_spec):
+            self._current_hotkey_spec = configured_spec
+
+    def _sorted_windows(self, windows):
+        return sorted(windows, key=lambda w: ((w.sandbox_name or "").lower(), int(w.hwnd)))
+
+    def _normalize_hwnd(self, hwnd):
+        try:
+            return int(hwnd)
+        except (TypeError, ValueError):
+            return None
+
+    def _switch_to_next_window(self, windows):
+        if not windows:
+            return
+
+        ordered = self._sorted_windows(windows)
+        active_hwnd = self._normalize_hwnd(self.get_active_window())
+        hwnds = [self._normalize_hwnd(w.hwnd) for w in ordered]
+        hwnds = [hwnd for hwnd in hwnds if hwnd is not None]
+        if not hwnds:
+            return
+
+        last_switched = self._normalize_hwnd(self._last_switched_hwnd)
+
+        # Prefer our own cursor (last switched hwnd) so presses always advance,
+        # even if foreground-window reporting is stale or focus was denied.
+        if last_switched in hwnds:
+            current_index = hwnds.index(last_switched)
+            next_hwnd = hwnds[(current_index + 1) % len(hwnds)]
+        elif active_hwnd in hwnds:
+            current_index = hwnds.index(active_hwnd)
+            next_hwnd = hwnds[(current_index + 1) % len(hwnds)]
+        else:
+            next_hwnd = hwnds[0]
+
+        activate_window(next_hwnd)
+        self._last_switched_hwnd = next_hwnd
+        logger.info("Hotkey switch: activated window %s", next_hwnd)
+
     def refresh_windows(self):
+        self._refresh_hotkey_binding()
         windows = enumerate_windows()
+        if self.hotkey_monitor.poll_triggered():
+            self._switch_to_next_window(windows)
+
         current_hwnds = {w.hwnd: w for w in windows}
         active_hwnd = self.get_active_window()
 
