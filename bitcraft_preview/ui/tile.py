@@ -138,7 +138,6 @@ class LivePreviewTile(QWidget):
             event.accept()
 
 
-    #TODO fix the flickers when Window is between 2 screens
     def enterEvent(self, event):
         super().enterEvent(event)
         self.is_hovered = True
@@ -240,7 +239,10 @@ class LivePreviewTile(QWidget):
 
     def update_inline_label_position(self):
         if INLINE_LABEL and self.label.isVisible():
-            self.label.move(self.x() + 10, self.y() + self.height() - self.label.height() - 10)
+            # mapToGlobal converts local logical coords to global logical screen coords,
+            # which is what move() on a parentless top-level window expects.
+            bottom_left = self.mapToGlobal(QPoint(10, self.height() - self.label.height() - 10))
+            self.label.move(bottom_left)
 
     def moveEvent(self, event):
         super().moveEvent(event)
@@ -277,14 +279,20 @@ class LivePreviewTile(QWidget):
 
     def update_thumbnail_rect(self):
         if self.thumbnail_handle:
+            # DWM rcDestination expects physical pixels, but Qt geometry is in logical pixels.
+            # Multiply by devicePixelRatio so the thumbnail fills the entire window at any DPI scale.
+            dpr = self.devicePixelRatio()
+            phys_w = int(self.width() * dpr)
+            phys_h = int(self.height() * dpr)
+
             if INLINE_LABEL:
                 # The whole window is the thumbnail
-                rect = (0, 0, self.width(), self.height())
+                rect = (0, 0, phys_w, phys_h)
             else:
                 # DWM renders over the Qt window. We restrict its height 
                 # so the QLabel sandbox name below is visible and not covered.
-                label_zone = self.label.height() + 20 # Label + margins
-                rect = (0, 0, self.width(), self.height() - label_zone)
+                label_zone = int((self.label.height() + 20) * dpr)  # Label + margins, in physical px
+                rect = (0, 0, phys_w, phys_h - label_zone)
             
             # Use configurable opacity (converted 0.0-1.0 to 0-255)
             # If hovered, become fully solid (255)
