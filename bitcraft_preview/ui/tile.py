@@ -4,7 +4,7 @@ from PySide6.QtGui import QPainterPath, QRegion, QPainter, QColor
 import ctypes
 from bitcraft_preview.win32.dwm_thumbnail import register_thumbnail, update_thumbnail, unregister_thumbnail
 from bitcraft_preview.win32.activation import activate_window
-from bitcraft_preview.config import INLINE_LABEL, PREVIEW_OPACITY, HOVER_ZOOM_ENABLED, HOVER_ZOOM_PERCENT
+from bitcraft_preview.config import INLINE_LABEL, get_preview_opacity, get_hover_zoom_enabled, get_hover_zoom_percent
 
 class LivePreviewTile(QWidget):
     def __init__(self, target_hwnd: int, label_text: str, parent=None):
@@ -44,7 +44,7 @@ class LivePreviewTile(QWidget):
         # Apply the configured opacity to the label's styles / effect
         # Set text and background according to our transparency factor, 
         # but add +0.25 so the text is always much more legible than the background!
-        self.base_label_op = min(1.0, PREVIEW_OPACITY + 0.25)
+        self.base_label_op = min(1.0, get_preview_opacity() + 0.25)
         
         # Set initial style
         self._apply_label_style(self.base_label_op)
@@ -99,7 +99,7 @@ class LivePreviewTile(QWidget):
             self.drag_start_position = event.globalPosition().toPoint()
             self.window_start_position = self.frameGeometry().topLeft()
             
-            if HOVER_ZOOM_ENABLED and self.zoomed_in:
+            if get_hover_zoom_enabled() and self.zoomed_in:
                 self._unzoom()
                 self.window_start_position = self.frameGeometry().topLeft()
 
@@ -119,7 +119,7 @@ class LivePreviewTile(QWidget):
         else:
             # Not dragging. Since mouseTracking is True, we get move events constantly while hovering.
             # Check if mouse leaves the ORIGINAL rect while zoomed, so we can shrink without waiting for them to leave the gigantic box.
-            if HOVER_ZOOM_ENABLED and self.zoomed_in and hasattr(self, 'original_rect') and self.original_rect:
+            if get_hover_zoom_enabled() and self.zoomed_in and hasattr(self, 'original_rect') and self.original_rect:
                 # globalPosition() is available in mouse move events
                 global_pos = event.globalPosition().toPoint()
                 
@@ -151,7 +151,7 @@ class LivePreviewTile(QWidget):
         if self.dragging:
             return
 
-        if HOVER_ZOOM_ENABLED and not self.zoomed_in:
+        if get_hover_zoom_enabled() and not self.zoomed_in:
             # Check if the mouse actually entered our *original* visible region and not just the overlap part
             # from another zoomed window. This prevents bouncing between two adjacent windows.
             global_pos = self.cursor().pos()
@@ -171,7 +171,7 @@ class LivePreviewTile(QWidget):
                 target_screen = self.screen()
                 
             screen_geom = target_screen.availableGeometry()
-            scale_factor = HOVER_ZOOM_PERCENT / 100.0
+            scale_factor = get_hover_zoom_percent() / 100.0
             
             new_w = int(self.original_rect.width() * scale_factor)
             new_h = int(self.original_rect.height() * scale_factor)
@@ -229,7 +229,7 @@ class LivePreviewTile(QWidget):
             
         self.is_hovered = False
         
-        if HOVER_ZOOM_ENABLED:
+        if get_hover_zoom_enabled():
             self._unzoom()
 
         self.update_thumbnail_rect()
@@ -288,7 +288,7 @@ class LivePreviewTile(QWidget):
             
             # Use configurable opacity (converted 0.0-1.0 to 0-255)
             # If hovered, become fully solid (255)
-            current_opacity = 1.0 if self.is_hovered else PREVIEW_OPACITY
+            current_opacity = 1.0 if self.is_hovered else get_preview_opacity()
             dwm_alpha = int(255 * current_opacity)
             update_thumbnail(self.thumbnail_handle, rect, opacity=dwm_alpha)
 
