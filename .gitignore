@@ -22,3 +22,4 @@ build/
 # Logs
 *.log
 design.md
+config.json

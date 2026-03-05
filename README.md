@@ -15,6 +15,23 @@ This project is built directly for Windows using pure DWM API and PySide6 for mi
 - **Hover Zoom**: Hovering over a tile temporarily enlarges it.
 - **Hidden When Active**: Automatically hides the overlay for the game client you are currently focused on (Toggleable). (When building yourself as there is no Config yet :^) )
 
+## Configuration
+
+When the application runs for the first time, it will automatically generate a `config.json` file in the same directory as the executable. You can open this file in Notepad or any text editor to change user settings:
+
+```json
+{
+    "UserSettings": {
+        "inline_label": true,                 // Needs Restart
+        "preview_opacity": 0.8,               // Live Update
+        "hover_zoom_enabled": true,           // Live Update
+        "hover_zoom_percent": 200,            // Live Update (100-500)
+        "hide_active_window_overlay": false   // Live Update
+    },
+    ...
+```
+Settings marked as `Live Update` will apply immediately as soon as you save the file! Settings marked as `Needs Restart` will require you to quit the app from the System Tray and restart it.
+
 ## Installation
 
 The easiest way to use BitCraft Sandboxie Preview is to download the pre-compiled executable.
