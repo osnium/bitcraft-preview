@@ -7,7 +7,7 @@ from PySide6.QtGui import QIcon, QAction
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu
 from bitcraft_preview.ui.overlay_manager import OverlayManager
 from bitcraft_preview.logging_setup import init_logging
-from bitcraft_preview.config import DEBUG
+from bitcraft_preview.config import DEBUG, ensure_config_exists, get_config_file_path
 
 def main():
     # Mutex check to prevent multiple instances
@@ -21,6 +21,11 @@ def main():
 
     logger = init_logging()
     logger.info("Starting BitCraft Preview application")
+    if ensure_config_exists():
+        logger.info("Using config file: %s", get_config_file_path())
+    else:
+        logger.error("Failed to create config file: %s", get_config_file_path())
+
     app = QApplication(sys.argv)
     
     # Handle CTRL+C if DEBUG is enabled

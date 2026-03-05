@@ -2,9 +2,10 @@
 from PySide6.QtWidgets import QWidget, QApplication
 from PySide6.QtCore import QTimer
 import ctypes
+import psutil
 from bitcraft_preview.win32.window_discovery import enumerate_windows
 from bitcraft_preview.ui.tile import LivePreviewTile
-from bitcraft_preview.config import REFRESH_INTERVAL_MS, get_hide_active_window_overlay, get_preview_tile_width, get_switch_window_hotkey
+from bitcraft_preview.config import PROCESS_NAME, REFRESH_INTERVAL_MS, get_hide_active_window_overlay, get_preview_tile_width, get_switch_window_enabled, get_switch_window_hotkey
 from bitcraft_preview.win32.title_parse import display_label
 from bitcraft_preview.win32.activation import activate_window
 from bitcraft_preview.win32.hotkey_monitor import GlobalHotkeyMonitor
@@ -12,6 +13,7 @@ import logging
 
 logger = logging.getLogger("bitcraft_preview")
 user32 = ctypes.windll.user32
+HOTKEY_POLL_INTERVAL_MS = 25
 
 class OverlayManager:
     def __init__(self):
@@ -25,6 +27,12 @@ class OverlayManager:
         self.timer = QTimer()
         self.timer.timeout.connect(self.refresh_windows)
         self.timer.start(REFRESH_INTERVAL_MS)
+
+        # Poll hotkey separately from expensive overlay refresh so switching stays responsive.
+        self.hotkey_timer = QTimer()
+        self.hotkey_timer.timeout.connect(self.poll_hotkey)
+        self.hotkey_timer.start(HOTKEY_POLL_INTERVAL_MS)
+
         self.refresh_windows()
 
     def get_active_window(self):
@@ -49,6 +57,23 @@ class OverlayManager:
             return int(hwnd)
         except (TypeError, ValueError):
             return None
+
+    def _is_target_process_foreground(self):
+        active_hwnd = self._normalize_hwnd(self.get_active_window())
+        if not active_hwnd:
+            return False
+
+        pid = ctypes.c_ulong()
+        user32.GetWindowThreadProcessId(active_hwnd, ctypes.byref(pid))
+        if not pid.value:
+            return False
+
+        try:
+            active_name = psutil.Process(pid.value).name().lower()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            return False
+
+        return active_name == PROCESS_NAME.lower()
 
     def _switch_to_next_window(self, windows):
         if not windows:
@@ -78,11 +103,20 @@ class OverlayManager:
         self._last_switched_hwnd = next_hwnd
         logger.info("Hotkey switch: activated window %s", next_hwnd)
 
+    def poll_hotkey(self):
+        self._refresh_hotkey_binding()
+        if not get_switch_window_enabled():
+            return
+
+        if not self._is_target_process_foreground():
+            return
+
+        if self.hotkey_monitor.poll_triggered():
+            self._switch_to_next_window(enumerate_windows())
+
     def refresh_windows(self):
         self._refresh_hotkey_binding()
         windows = enumerate_windows()
-        if self.hotkey_monitor.poll_triggered():
-            self._switch_to_next_window(windows)
 
         current_hwnds = {w.hwnd: w for w in windows}
         active_hwnd = self.get_active_window()

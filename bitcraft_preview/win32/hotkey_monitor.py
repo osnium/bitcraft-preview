@@ -127,12 +127,16 @@ class GlobalHotkeyMonitor:
         if self._main_key is None:
             return False
 
+        state = user32.GetAsyncKeyState(self._main_key)
+
         # Bit 0x8000 set means key is currently down.
-        main_down = bool(user32.GetAsyncKeyState(self._main_key) & 0x8000)
+        main_down = bool(state & 0x8000)
+        # Bit 0x0001 set means key transitioned since last query.
+        transitioned = bool(state & 0x0001)
         mods_down = all(user32.GetAsyncKeyState(vk) & 0x8000 for vk in self._modifiers)
         now_pressed = main_down and mods_down
 
-        # Rising-edge detection prevents repeats while holding the key/button.
-        triggered = now_pressed and not self._pressed
+        # Trigger on either a pressed transition or rising edge while modifiers are held.
+        triggered = mods_down and (transitioned or (now_pressed and not self._pressed))
         self._pressed = now_pressed
         return triggered
