@@ -39,7 +39,7 @@ def _default_bitcraft_path(library_root: str) -> str:
         library_root,
         "steamapps",
         "common",
-        "BitCraft",
+        "BitCraft Online",
         "BitCraft.exe",
     )
 
