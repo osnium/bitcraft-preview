@@ -81,12 +81,15 @@ def _run_native_cli(args) -> None:
             logger.info("Re-login launched %s (%s) steam_pid=%s", result.instance_id, result.local_username, result.steam_pid)
             print(f"Re-login launched {result.instance_id} ({result.local_username}) steam_pid={result.steam_pid}")
     except NativeSetupError as e:
+        logger.error("Native setup error: %s", e)
         print(f"Native setup error: {e}")
         raise SystemExit(2)
     except NativeProcessControlError as e:
+        logger.error("Native mode error: %s", e)
         print(f"Native mode error: {e}")
         raise SystemExit(2)
     except Exception as e:
+        logger.exception("Native mode unexpected error")
         print(f"Native mode unexpected error: {e}")
         raise SystemExit(1)
 

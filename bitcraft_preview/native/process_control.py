@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import time
 from dataclasses import dataclass
@@ -60,6 +61,8 @@ class NativeProcessController:
             time.sleep(5)
 
         override = self._master_override_name(instance.instance_id)
+        working_dir = os.path.dirname(instance.steam_exe_path) if instance.steam_exe_path else None
+        
         if relogin_mode:
             args = f"-master_ipc_name_override {override}"
             steam_pid = self._launcher.launch_foreground(
@@ -67,6 +70,7 @@ class NativeProcessController:
                 password=password,
                 exe_path=instance.steam_exe_path,
                 args=args,
+                working_directory=working_dir,
             )
         else:
             args = f"-master_ipc_name_override {override} -silent -applaunch {APP_ID_BITCRAFT}"
@@ -75,6 +79,7 @@ class NativeProcessController:
                 password=password,
                 exe_path=instance.steam_exe_path,
                 args=args,
+                working_directory=working_dir,
             )
 
         return LaunchResult(

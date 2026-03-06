@@ -106,8 +106,10 @@ class NativeModeStateManager:
         return instances
 
     def get_instance(self, instance_id: str) -> NativeInstance | None:
+        # Case-insensitive match for user convenience (Steam1 vs steam1).
+        target = instance_id.strip().lower()
         for instance in self.list_instances():
-            if instance.instance_id == instance_id:
+            if instance.instance_id.strip().lower() == target:
                 return instance
         return None
 

@@ -53,9 +53,14 @@ DEFAULT_CONFIG = {
 }
 
 def _resolve_config_file_path() -> str:
-    # In packaged builds, keep config next to the executable.
+    # In packaged builds, store config in LOCALAPPDATA to survive rebuilds/reinstalls.
     if getattr(sys, "frozen", False):
-        base_dir = os.path.dirname(sys.executable)
+        local_app_data = os.environ.get("LOCALAPPDATA", "")
+        if not local_app_data:
+            # Fallback: next to executable if LOCALAPPDATA unavailable (unlikely).
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.join(local_app_data, "BitCraftPreview")
     else:
         # In dev, keep config at repository/workspace root.
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -71,6 +76,8 @@ def get_config_file_path() -> str:
 
 def load_config():
     merged_config = copy.deepcopy(DEFAULT_CONFIG)
+    config_updated = False  # Track if we added new defaults
+    
     if os.path.exists(config_file_path):
         try:
             with open(config_file_path, "r") as f:
@@ -82,13 +89,17 @@ def load_config():
 
                 if "UserSettings" not in merged_config or not isinstance(merged_config["UserSettings"], dict):
                     merged_config["UserSettings"] = {}
+                    config_updated = True
                 if "SystemSettings" not in merged_config or not isinstance(merged_config["SystemSettings"], dict):
                     merged_config["SystemSettings"] = {}
+                    config_updated = True
 
                 if "native_mode" not in merged_config or not isinstance(merged_config["native_mode"], dict):
                     merged_config["native_mode"] = {}
+                    config_updated = True
                 if "sandboxie_mode" not in merged_config or not isinstance(merged_config["sandboxie_mode"], dict):
                     merged_config["sandboxie_mode"] = {}
+                    config_updated = True
 
                 # Merge known sections while retaining unknown fields from disk.
                 default_user = DEFAULT_CONFIG["UserSettings"]
@@ -97,30 +108,53 @@ def load_config():
                 default_sandboxie = DEFAULT_CONFIG["sandboxie_mode"]
 
                 merged_user = copy.deepcopy(default_user)
+                user_settings_before = len(merged_config["UserSettings"])
                 merged_user.update(merged_config["UserSettings"])
+                if len(merged_user) > user_settings_before:
+                    config_updated = True
                 merged_config["UserSettings"] = merged_user
 
                 merged_system = copy.deepcopy(default_system)
+                system_settings_before = len(merged_config["SystemSettings"])
                 merged_system.update(merged_config["SystemSettings"])
+                if len(merged_system) > system_settings_before:
+                    config_updated = True
                 merged_config["SystemSettings"] = merged_system
 
                 merged_native = copy.deepcopy(default_native)
+                native_keys_before = set(merged_config["native_mode"].keys())
                 merged_native.update(merged_config["native_mode"])
                 if not isinstance(merged_native.get("last_reconcile"), dict):
                     merged_native["last_reconcile"] = {}
                 reconcile = copy.deepcopy(default_native["last_reconcile"])
+                reconcile_keys_before = len(merged_native.get("last_reconcile", {}))
                 reconcile.update(merged_native["last_reconcile"])
+                if len(reconcile) > reconcile_keys_before:
+                    config_updated = True
                 merged_native["last_reconcile"] = reconcile
+                if set(merged_native.keys()) > native_keys_before:
+                    config_updated = True
                 merged_config["native_mode"] = merged_native
 
                 merged_sandboxie = copy.deepcopy(default_sandboxie)
+                sandboxie_keys_before = len(merged_config["sandboxie_mode"])
                 merged_sandboxie.update(merged_config["sandboxie_mode"])
+                if len(merged_sandboxie) > sandboxie_keys_before:
+                    config_updated = True
                 merged_config["sandboxie_mode"] = merged_sandboxie
 
                 if "version" not in merged_config:
                     merged_config["version"] = DEFAULT_CONFIG["version"]
+                    config_updated = True
                 if "mode" not in merged_config:
                     merged_config["mode"] = DEFAULT_CONFIG["mode"]
+                    config_updated = True
+                    
+                # Persist merged config back to disk if new defaults were added.
+                # This ensures users get new features/options automatically on upgrade.
+                if config_updated:
+                    logger.info("Config file updated with new default options")
+                    save_config(merged_config)
         except Exception as e:
             logger.error(f"Error reading config file '{config_file_path}': {e}")
     else:
