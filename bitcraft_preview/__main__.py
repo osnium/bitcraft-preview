@@ -9,6 +9,7 @@ from bitcraft_preview.logging_setup import init_logging
 from bitcraft_preview.native import (
     NativeProcessControlError,
     NativeProcessController,
+    NativeModeStateManager,
     NativeSetupError,
     NativeSetupService,
     setup_disclaimer_text,
@@ -158,6 +159,200 @@ def main():
     tray_icon.setToolTip("BitCraft Preview")
 
     tray_menu = QMenu()
+    native_accounts_menu = QMenu("Native Accounts", tray_menu)
+    tools_menu = QMenu("Tools", tray_menu)
+    _manager = None
+
+    def _refresh_overlay_and_tray_labels() -> None:
+        # Keep account labels and overlays in sync immediately after metadata edits.
+        _rebuild_native_accounts_menu()
+        if _manager is not None:
+            _manager.refresh_windows()
+
+    def _instance_menu_label(instance) -> str:
+        nickname = (instance.overlay_nickname or "").strip()
+        if nickname:
+            return f"{nickname} ({instance.instance_id})"
+        return instance.instance_id
+
+    def _show_native_action_error(title: str, e: Exception) -> None:
+        logger.error("%s: %s", title, e)
+        QMessageBox.critical(None, title, str(e))
+
+    def _update_instance_metadata(instance_id: str, *, entity_id: str | None = None, overlay_nickname: str | None = None) -> None:
+        state = NativeModeStateManager()
+        instance = state.get_instance(instance_id)
+        if instance is None:
+            raise NativeProcessControlError(f"Unknown native instance: {instance_id}")
+
+        state.upsert_instance(
+            instance_id=instance.instance_id,
+            local_username=instance.local_username,
+            entity_id=entity_id,
+            overlay_nickname=overlay_nickname,
+            status=instance.status,
+        )
+
+    def _set_entity_id_from_tray(instance_id: str) -> None:
+        state = NativeModeStateManager()
+        instance = state.get_instance(instance_id)
+        if instance is None:
+            QMessageBox.critical(None, "Native Account Error", f"Unknown native instance: {instance_id}")
+            return
+
+        value, ok = QInputDialog.getText(
+            None,
+            "Set Entity ID",
+            f"Enter Entity ID for {instance.instance_id} ({instance.local_username})\nLeave blank to clear:",
+            text=instance.entity_id,
+        )
+        if not ok:
+            return
+
+        try:
+            _update_instance_metadata(instance.instance_id, entity_id=value.strip(), overlay_nickname=None)
+            logger.info("Updated entity_id for %s", instance.instance_id)
+            _refresh_overlay_and_tray_labels()
+        except Exception as e:
+            _show_native_action_error("Set Entity ID Error", e)
+
+    def _set_overlay_name_from_tray(instance_id: str) -> None:
+        state = NativeModeStateManager()
+        instance = state.get_instance(instance_id)
+        if instance is None:
+            QMessageBox.critical(None, "Native Account Error", f"Unknown native instance: {instance_id}")
+            return
+
+        value, ok = QInputDialog.getText(
+            None,
+            "Set Overlay Name",
+            f"Enter Overlay Name for {instance.instance_id} ({instance.local_username})\nLeave blank to clear:",
+            text=instance.overlay_nickname,
+        )
+        if not ok:
+            return
+
+        try:
+            _update_instance_metadata(instance.instance_id, entity_id=None, overlay_nickname=value.strip())
+            logger.info("Updated overlay_nickname for %s", instance.instance_id)
+            _refresh_overlay_and_tray_labels()
+        except Exception as e:
+            _show_native_action_error("Set Overlay Name Error", e)
+
+    def _launch_instance_from_tray(instance_id: str) -> None:
+        try:
+            result = NativeProcessController().launch_instance(instance_id)
+            message = f"Launched {result.instance_id} ({result.local_username}) steam_pid={result.steam_pid}"
+            logger.info(message)
+            if DEBUG:
+                QMessageBox.information(None, "Native Launch", message)
+        except NativeProcessControlError as e:
+            _show_native_action_error("Native Launch Error", e)
+        except Exception as e:
+            logger.exception("Unexpected tray native launch error")
+            _show_native_action_error("Native Launch Error", e)
+
+    def _restart_instance_from_tray(instance_id: str) -> None:
+        try:
+            result = NativeProcessController().restart_instance(instance_id)
+            message = f"Restarted {result.instance_id} ({result.local_username}) steam_pid={result.steam_pid}"
+            logger.info(message)
+            if DEBUG:
+                QMessageBox.information(None, "Native Restart", message)
+        except NativeProcessControlError as e:
+            _show_native_action_error("Native Restart Error", e)
+        except Exception as e:
+            logger.exception("Unexpected tray native restart error")
+            _show_native_action_error("Native Restart Error", e)
+
+    def _launch_all_instances_from_tray() -> None:
+        state = NativeModeStateManager()
+        instances = state.list_instances()
+        if not instances:
+            QMessageBox.information(None, "Native Launch All", "No native accounts configured.")
+            return
+
+        controller = NativeProcessController()
+        launched = []
+        skipped = []
+        failed = []
+
+        for instance in instances:
+            try:
+                if controller.is_instance_running(instance.instance_id):
+                    skipped.append(instance.instance_id)
+                    continue
+                result = controller.launch_instance(instance.instance_id)
+                launched.append(f"{result.instance_id} ({result.local_username})")
+            except Exception as e:
+                logger.error("Launch-all failed for %s: %s", instance.instance_id, e)
+                failed.append(f"{instance.instance_id}: {e}")
+
+        logger.info("Launch all complete: launched=%s skipped=%s failed=%s", len(launched), len(skipped), len(failed))
+        if failed:
+            details = "\n".join(failed)
+            QMessageBox.critical(None, "Native Launch All Error", f"Some accounts failed to launch:\n{details}")
+            return
+
+        if DEBUG:
+            QMessageBox.information(
+                None,
+                "Native Launch All",
+                f"launched={len(launched)}, already_running={len(skipped)}",
+            )
+
+    def _rebuild_native_accounts_menu() -> None:
+        native_accounts_menu.clear()
+        instances = NativeModeStateManager().list_instances()
+        if not instances:
+            empty_action = QAction("No Native Accounts Configured", app)
+            empty_action.setEnabled(False)
+            native_accounts_menu.addAction(empty_action)
+            return
+
+        launch_all_action = QAction("Launch All (Not Running)", app)
+        launch_all_action.triggered.connect(_launch_all_instances_from_tray)
+        native_accounts_menu.addAction(launch_all_action)
+        native_accounts_menu.addSeparator()
+
+        for instance in instances:
+            account_menu = QMenu(_instance_menu_label(instance), native_accounts_menu)
+
+            launch_action = QAction("Launch", app)
+            launch_action.triggered.connect(lambda _checked=False, instance_id=instance.instance_id: _launch_instance_from_tray(instance_id))
+            account_menu.addAction(launch_action)
+
+            restart_action = QAction("Restart", app)
+            restart_action.triggered.connect(lambda _checked=False, instance_id=instance.instance_id: _restart_instance_from_tray(instance_id))
+            account_menu.addAction(restart_action)
+
+            account_menu.addSeparator()
+
+            set_entity_id_action = QAction("Set Entity ID...", app)
+            set_entity_id_action.triggered.connect(lambda _checked=False, instance_id=instance.instance_id: _set_entity_id_from_tray(instance_id))
+            account_menu.addAction(set_entity_id_action)
+
+            set_overlay_name_action = QAction("Set Overlay Name...", app)
+            set_overlay_name_action.triggered.connect(lambda _checked=False, instance_id=instance.instance_id: _set_overlay_name_from_tray(instance_id))
+            account_menu.addAction(set_overlay_name_action)
+
+            native_accounts_menu.addMenu(account_menu)
+
+    def _open_file_path(path: str, title: str) -> None:
+        try:
+            if not os.path.exists(path):
+                QMessageBox.warning(None, title, f"Path does not exist:\n{path}")
+                return
+            os.startfile(path)
+        except Exception as e:
+            _show_native_action_error(title, e)
+
+    def _open_config_from_tray() -> None:
+        _open_file_path(get_config_file_path(), "Open Config Error")
+
+    def _open_log_from_tray() -> None:
+        log_path = os.path.join(os.environ.get("LOCALAPPDATA", ""), "BitCraftPreview", "bitcraft_preview.log")
+        _open_file_path(log_path, "Open Log Error")
 
     def _confirm_native_account_changes(operation_name: str) -> bool:
         text = f"{setup_disclaimer_text()}\n\nProceed with {operation_name}?"
@@ -195,6 +390,7 @@ def main():
             )
             logger.info(message)
             QMessageBox.information(None, "Native Setup Complete", message)
+            _refresh_overlay_and_tray_labels()
         except NativeSetupError as e:
             logger.error("Native setup failed from tray: %s", e)
             QMessageBox.critical(None, "Native Setup Error", str(e))
@@ -230,6 +426,7 @@ def main():
             )
             logger.info(message)
             QMessageBox.information(None, "Native Cleanup Complete", message)
+            _refresh_overlay_and_tray_labels()
         except NativeSetupError as e:
             logger.error("Native cleanup failed from tray: %s", e)
             QMessageBox.critical(None, "Native Cleanup Error", str(e))
@@ -244,6 +441,19 @@ def main():
     native_cleanup_action = QAction("Native Cleanup...", app)
     native_cleanup_action.triggered.connect(_run_native_cleanup_from_tray)
     tray_menu.addAction(native_cleanup_action)
+
+    _rebuild_native_accounts_menu()
+    tray_menu.addMenu(native_accounts_menu)
+
+    open_config_action = QAction("Open Config", app)
+    open_config_action.triggered.connect(_open_config_from_tray)
+    tools_menu.addAction(open_config_action)
+
+    open_log_action = QAction("Open Log", app)
+    open_log_action.triggered.connect(_open_log_from_tray)
+    tools_menu.addAction(open_log_action)
+
+    tray_menu.addMenu(tools_menu)
 
     tray_menu.addSeparator()
 

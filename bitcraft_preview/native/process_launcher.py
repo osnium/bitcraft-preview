@@ -133,8 +133,11 @@ class ProcessLauncher:
         )
 
     def taskkill_for_user(self, *, username: str, password: str) -> int:
-        # Run taskkill as the target local user to avoid admin requirements for own processes.
-        command_line = f'taskkill.exe /F /FI "USERNAME eq {username}"'
+        # Run taskkill as the target local user and only terminate Steam/BitCraft trees.
+        # This avoids killing unrelated processes owned by that account.
+        command_line = (
+            f'taskkill.exe /F /T /FI "USERNAME eq {username}" /IM steam.exe /IM BitCraft.exe'
+        )
         return self._create_process(
             username=username,
             password=password,

@@ -5,6 +5,8 @@ import re
 import time
 from dataclasses import dataclass
 
+import psutil
+
 from .process_launcher import ProcessLauncher
 from .state_manager import NativeInstance, NativeModeStateManager
 
@@ -41,6 +43,34 @@ class NativeProcessController:
                 f"Native instance '{instance.instance_id}' has no steam_exe_path. Run setup/reconcile first."
             )
         return instance
+
+    @staticmethod
+    def _username_matches(proc_username: str | None, local_username: str) -> bool:
+        if not proc_username:
+            return False
+        normalized = proc_username.strip().lower()
+        target = local_username.strip().lower()
+        if "\\" in normalized:
+            normalized = normalized.split("\\", 1)[1]
+        return normalized == target
+
+    def is_instance_running(self, instance_ref: str) -> bool:
+        instance = self._resolve_instance(instance_ref)
+        target_user = instance.local_username.strip().lower()
+        names = {"steam.exe", "bitcraft.exe"}
+
+        for proc in psutil.process_iter(["name", "username"]):
+            try:
+                name = (proc.info.get("name") or "").strip().lower()
+                if name not in names:
+                    continue
+                username = proc.info.get("username")
+                if self._username_matches(username, target_user):
+                    return True
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+
+        return False
 
     @staticmethod
     def _master_override_name(instance_id: str) -> str:

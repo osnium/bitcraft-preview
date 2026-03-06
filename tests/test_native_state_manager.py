@@ -82,6 +82,54 @@ class NativeStateManagerTests(unittest.TestCase):
         self.assertTrue(removed)
         self.assertIsNone(missing)
 
+    def test_upsert_allows_clearing_overlay_and_entity(self) -> None:
+        manager = NativeModeStateManager()
+        with patch("bitcraft_preview.native.state_manager.protect_text", return_value="ENC"):
+            manager.upsert_instance(
+                instance_id="steam4",
+                local_username="bitcraft4",
+                plain_password="pw",
+                entity_id="entity-123",
+                overlay_nickname="Main",
+            )
+
+        manager.upsert_instance(
+            instance_id="steam4",
+            local_username="bitcraft4",
+            entity_id="",
+            overlay_nickname="",
+            status=None,
+        )
+
+        updated = manager.get_instance("steam4")
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated.entity_id, "")
+        self.assertEqual(updated.overlay_nickname, "")
+
+    def test_upsert_preserves_metadata_when_none(self) -> None:
+        manager = NativeModeStateManager()
+        with patch("bitcraft_preview.native.state_manager.protect_text", return_value="ENC"):
+            manager.upsert_instance(
+                instance_id="steam5",
+                local_username="bitcraft5",
+                plain_password="pw",
+                entity_id="entity-abc",
+                overlay_nickname="Alt",
+            )
+
+        manager.upsert_instance(
+            instance_id="steam5",
+            local_username="bitcraft5",
+            entity_id=None,
+            overlay_nickname=None,
+            status=None,
+        )
+
+        updated = manager.get_instance("steam5")
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated.entity_id, "entity-abc")
+        self.assertEqual(updated.overlay_nickname, "Alt")
+
 
 if __name__ == "__main__":
     unittest.main()

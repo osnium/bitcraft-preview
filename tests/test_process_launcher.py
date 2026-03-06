@@ -64,6 +64,24 @@ class ProcessLauncherTests(unittest.TestCase):
                     args="",
                 )
 
+    def test_taskkill_for_user_targets_steam_and_bitcraft_only(self) -> None:
+        launcher = ProcessLauncher()
+
+        captured = {}
+
+        def _fake_create_process(**kwargs):
+            captured.update(kwargs)
+            return 1
+
+        with patch.object(launcher, "_create_process", side_effect=_fake_create_process):
+            launcher.taskkill_for_user(username="bitcraft1", password="pw")
+
+        command_line = captured["command_line"]
+        self.assertIn('USERNAME eq bitcraft1', command_line)
+        self.assertIn('/IM steam.exe', command_line)
+        self.assertIn('/IM BitCraft.exe', command_line)
+        self.assertIn('/T', command_line)
+
 
 if __name__ == "__main__":
     unittest.main()
