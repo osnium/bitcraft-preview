@@ -170,10 +170,14 @@ def main():
             _manager.refresh_windows()
 
     def _instance_menu_label(instance) -> str:
+        controller = NativeProcessController()
+        is_running = controller.is_instance_running(instance.instance_id)
+        status_icon = "🟢" if is_running else "⚫"
+        
         nickname = (instance.overlay_nickname or "").strip()
         if nickname:
-            return f"{nickname} ({instance.instance_id})"
-        return instance.instance_id
+            return f"{status_icon} {nickname}"
+        return f"{status_icon} {instance.instance_id}"
 
     def _show_native_action_error(title: str, e: Exception) -> None:
         logger.error("%s: %s", title, e)
@@ -265,6 +269,20 @@ def main():
             logger.exception("Unexpected tray native restart error")
             _show_native_action_error("Native Restart Error", e)
 
+    def _kill_instance_from_tray(instance_id: str) -> None:
+        try:
+            controller = NativeProcessController()
+            controller.force_kill_instance_processes(instance_id, timeout=10.0)
+            message = f"Force-killed processes for {instance_id}"
+            logger.info(message)
+            if DEBUG:
+                QMessageBox.information(None, "Native Kill", message)
+        except NativeProcessControlError as e:
+            _show_native_action_error("Native Kill Error", e)
+        except Exception as e:
+            logger.exception("Unexpected tray native kill error")
+            _show_native_action_error("Native Kill Error", e)
+
     def _launch_all_instances_from_tray() -> None:
         state = NativeModeStateManager()
         instances = state.list_instances()
@@ -308,10 +326,23 @@ def main():
             QMessageBox.information(None, "Kill All Instances", "No native accounts configured.")
             return
 
+        # Build instance list with status and avoid redundant instance_id/username display
+        instance_lines = []
+        for inst in instances:
+            label = _instance_menu_label(inst)  # includes status icon and nickname/instance_id
+            nickname = (inst.overlay_nickname or "").strip()
+            # Only add username in parens if nickname is set (to show which Windows account)
+            if nickname:
+                instance_lines.append(f"• {label} ({inst.local_username})")
+            else:
+                # instance_id already in label, username would be redundant
+                instance_lines.append(f"• {label}")
+        
+        instance_list = "\n".join(instance_lines)
         confirm = QMessageBox.warning(
             None,
             "Confirm Kill All",
-            "Force-kill all Steam and BitCraft processes for all native instances?\n\nThis will immediately terminate:",
+            f"Force-kill all Steam and BitCraft processes for all native instances?\n\nThis will immediately terminate:\n{instance_list}",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -358,6 +389,10 @@ def main():
             restart_action = QAction("Restart", app)
             restart_action.triggered.connect(lambda _checked=False, instance_id=instance.instance_id: _restart_instance_from_tray(instance_id))
             account_menu.addAction(restart_action)
+
+            kill_action = QAction("Kill", app)
+            kill_action.triggered.connect(lambda _checked=False, instance_id=instance.instance_id: _kill_instance_from_tray(instance_id))
+            account_menu.addAction(kill_action)
 
             account_menu.addSeparator()
 
@@ -468,6 +503,7 @@ def main():
             QMessageBox.critical(None, "Native Cleanup Error", str(e))
 
     _rebuild_native_accounts_menu()
+    native_accounts_menu.aboutToShow.connect(_rebuild_native_accounts_menu)
     tray_menu.addMenu(native_accounts_menu)
 
     native_setup_action = QAction("Native Setup...", app)
