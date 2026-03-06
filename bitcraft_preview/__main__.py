@@ -301,6 +301,34 @@ def main():
                 f"launched={len(launched)}, already_running={len(skipped)}",
             )
 
+    def _kill_all_instances_from_tray() -> None:
+        state = NativeModeStateManager()
+        instances = state.list_instances()
+        if not instances:
+            QMessageBox.information(None, "Kill All Instances", "No native accounts configured.")
+            return
+
+        confirm = QMessageBox.warning(
+            None,
+            "Confirm Kill All",
+            "Force-kill all Steam and BitCraft processes for all native instances?\n\nThis will immediately terminate:",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            controller = NativeProcessController()
+            count = controller.kill_all_instances(timeout=10.0)
+            message = f"Killed {count} process(es) across all native instances."
+            logger.info(message)
+            if DEBUG:
+                QMessageBox.information(None, "Kill All Complete", message)
+        except Exception as e:
+            logger.exception("Kill all failed: %s", e)
+            QMessageBox.critical(None, "Kill All Error", str(e))
+
     def _rebuild_native_accounts_menu() -> None:
         native_accounts_menu.clear()
         instances = NativeModeStateManager().list_instances()
@@ -313,6 +341,11 @@ def main():
         launch_all_action = QAction("Launch All (Not Running)", app)
         launch_all_action.triggered.connect(_launch_all_instances_from_tray)
         native_accounts_menu.addAction(launch_all_action)
+        
+        kill_all_action = QAction("Kill All Instances", app)
+        kill_all_action.triggered.connect(_kill_all_instances_from_tray)
+        native_accounts_menu.addAction(kill_all_action)
+        
         native_accounts_menu.addSeparator()
 
         for instance in instances:
@@ -434,16 +467,18 @@ def main():
             logger.exception("Unexpected tray native cleanup error")
             QMessageBox.critical(None, "Native Cleanup Error", str(e))
 
+    _rebuild_native_accounts_menu()
+    tray_menu.addMenu(native_accounts_menu)
+
     native_setup_action = QAction("Native Setup...", app)
     native_setup_action.triggered.connect(_run_native_setup_from_tray)
-    tray_menu.addAction(native_setup_action)
+    tools_menu.addAction(native_setup_action)
 
     native_cleanup_action = QAction("Native Cleanup...", app)
     native_cleanup_action.triggered.connect(_run_native_cleanup_from_tray)
-    tray_menu.addAction(native_cleanup_action)
+    tools_menu.addAction(native_cleanup_action)
 
-    _rebuild_native_accounts_menu()
-    tray_menu.addMenu(native_accounts_menu)
+    tools_menu.addSeparator()
 
     open_config_action = QAction("Open Config", app)
     open_config_action.triggered.connect(_open_config_from_tray)
