@@ -13,7 +13,7 @@ This project is built directly for Windows using pure DWM API and PySide6 for mi
 - **Sandboxie Support**: Parses Sandboxie Plus injected Window Titles `[#] [SandboxName] BitCraft [#]` and labels your preview tiles correctly.
 - **Quick Switching**: Restores minimized windows and reliably brings them to the foreground via a single mouse click. 
 - **Hover Zoom**: Hovering over a tile temporarily enlarges it.
-- **Hidden When Active**: Automatically hides the overlay for the game client you are currently focused on (Toggleable). (When building yourself as there is no Config yet :^) )
+- **Hidden When Active**: Automatically hides the overlay for the game client you are currently focused on (Toggleable). 
 
 ## Configuration
 
