@@ -1,4 +1,5 @@
 import sys
+import os
 import signal
 import ctypes
 from ctypes import wintypes
@@ -8,6 +9,17 @@ from PySide6.QtWidgets import QSystemTrayIcon, QMenu
 from bitcraft_preview.ui.overlay_manager import OverlayManager
 from bitcraft_preview.logging_setup import init_logging
 from bitcraft_preview.config import DEBUG, ensure_config_exists, get_config_file_path
+
+def get_asset_path(asset_name):
+    """Get the path to an asset file, handling both dev and packaged modes."""
+    if getattr(sys, "frozen", False):
+        # Running as compiled executable - assets are in _MEIPASS/assets/
+        base_path = sys._MEIPASS
+        return os.path.join(base_path, "assets", asset_name)
+    else:
+        # Running in development - assets are relative to this file
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(base_path, "bitcraft_preview", "assets", asset_name)
 
 def main():
     # Mutex check to prevent multiple instances
@@ -35,12 +47,15 @@ def main():
     # Configure system tray icon so the user can quit the app
     app.setQuitOnLastWindowClosed(False)
     
+    # Icons created by XATE Media (xate.eu)
     tray_icon = QSystemTrayIcon()
-    # It's best practice to use an actual icon file. Since we don't have one readily available,
-    # we can use a built-in standard icon or just text if icon is missing, but QSystemTrayIcon
-    # requires a valid icon to show up. We will use a standard icon.
-    fallback_icon =  app.style().standardIcon(app.style().StandardPixmap.SP_ComputerIcon)
-    tray_icon.setIcon(fallback_icon)
+    systemtray_icon_path = get_asset_path("systemtray.ico")
+    if os.path.exists(systemtray_icon_path):
+        tray_icon.setIcon(QIcon(systemtray_icon_path))
+    else:
+        logger.warning(f"System tray icon not found at: {systemtray_icon_path}")
+        fallback_icon = app.style().standardIcon(app.style().StandardPixmap.SP_ComputerIcon)
+        tray_icon.setIcon(fallback_icon)
     tray_icon.setToolTip("BitCraft Preview")
     
     tray_menu = QMenu()
