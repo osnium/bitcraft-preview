@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 
 from .process_launcher import ProcessLauncher
@@ -48,12 +49,15 @@ class NativeProcessController:
         safe = re.sub(r"[^a-zA-Z0-9]", "", instance_id) or "steam"
         return f"steam{safe}"
 
-    def _launch(self, instance: NativeInstance, *, relogin_mode: bool, restart_mode: bool) -> LaunchResult:
+    def _launch(self, instance: NativeInstance, *, relogin_mode: bool, restart_mode: bool, pre_kill: bool = False) -> LaunchResult:
         password = self._state.get_plain_password(instance.instance_id)
 
-        if restart_mode or relogin_mode:
-            # Mandatory pre-kill before restart/relogin to avoid stale Steam/CEF state.
+        if restart_mode or relogin_mode or pre_kill:
+            # Pre-kill before launch to avoid stale Steam/CEF state and multiple instance conflicts.
             self._launcher.taskkill_for_user(username=instance.local_username, password=password)
+            # Wait for processes to fully terminate before re-launching.
+            # Steam can have child processes that take time to clean up.
+            time.sleep(5)
 
         override = self._master_override_name(instance.instance_id)
         if relogin_mode:
@@ -81,7 +85,7 @@ class NativeProcessController:
 
     def launch_instance(self, instance_ref: str) -> LaunchResult:
         instance = self._resolve_instance(instance_ref)
-        return self._launch(instance, relogin_mode=False, restart_mode=False)
+        return self._launch(instance, relogin_mode=False, restart_mode=False, pre_kill=True)
 
     def restart_instance(self, instance_ref: str) -> LaunchResult:
         instance = self._resolve_instance(instance_ref)

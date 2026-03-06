@@ -172,9 +172,9 @@ class NativeSetupService:
                 os.makedirs(instance_root, exist_ok=True)
                 summary.folders_created += 1
 
+            # Ensure steam.exe is present in the instance folder.
             if not os.path.isfile(steam_exe_path):
                 shutil.copy2(steam_exe_source, steam_exe_path)
-                summary.folders_repaired += 1
 
             link_action = self._ensure_steamapps_link(steamapps_link_path, steamapps_target)
             if link_action == "created":

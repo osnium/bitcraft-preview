@@ -26,6 +26,11 @@ def get_asset_path(asset_name):
 
 
 def _run_native_cli(args) -> None:
+    # Initialize logging for CLI operations to ensure debug info is captured.
+    logger = init_logging()
+    if ensure_config_exists():
+        logger.info("Using config file: %s", get_config_file_path())
+    
     try:
         if args.native_setup is not None:
             if not args.native_ack_user_changes:
@@ -65,12 +70,15 @@ def _run_native_cli(args) -> None:
         controller = NativeProcessController()
         if args.native_launch:
             result = controller.launch_instance(args.native_launch)
+            logger.info("Launched %s (%s) steam_pid=%s", result.instance_id, result.local_username, result.steam_pid)
             print(f"Launched {result.instance_id} ({result.local_username}) steam_pid={result.steam_pid}")
         elif args.native_restart:
             result = controller.restart_instance(args.native_restart)
+            logger.info("Restarted %s (%s) steam_pid=%s", result.instance_id, result.local_username, result.steam_pid)
             print(f"Restarted {result.instance_id} ({result.local_username}) steam_pid={result.steam_pid}")
         elif args.native_relogin:
             result = controller.relogin_instance(args.native_relogin)
+            logger.info("Re-login launched %s (%s) steam_pid=%s", result.instance_id, result.local_username, result.steam_pid)
             print(f"Re-login launched {result.instance_id} ({result.local_username}) steam_pid={result.steam_pid}")
     except NativeSetupError as e:
         print(f"Native setup error: {e}")
@@ -198,7 +206,12 @@ def main():
         confirm = QMessageBox.warning(
             None,
             "Confirm Native Cleanup",
-            "This will remove app-managed native users and Steam instance folders. Continue?",
+            (
+                "This will delete:\n"
+                "- App-managed local Windows users (bitcraft1, bitcraft2, ...)\n"
+                "- App-managed Steam instance folders under configured steam_instance_root\n\n"
+                "Use this only when you want to fully revert Native Mode. Continue?"
+            ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )

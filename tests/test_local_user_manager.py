@@ -40,9 +40,18 @@ class LocalUserManagerTests(unittest.TestCase):
         with patch.object(mgr, "user_exists", return_value=False), patch(
             "bitcraft_preview.native.local_user_manager._run_command",
             return_value=_cp(1, stderr="access denied"),
-        ):
+        ), patch("bitcraft_preview.native.local_user_manager._create_user_with_powershell", return_value=_cp(1, stderr="ps failed")):
             with self.assertRaises(LocalUserError):
                 mgr.create_user("bitcraft1", "pw")
+
+    def test_create_user_fallback_powershell_success(self) -> None:
+        mgr = LocalUserManager()
+        with patch.object(mgr, "user_exists", return_value=False), patch(
+            "bitcraft_preview.native.local_user_manager._run_command",
+            return_value=_cp(1, stderr="No valid response was provided."),
+        ), patch("bitcraft_preview.native.local_user_manager._create_user_with_powershell", return_value=_cp(0)):
+            result = mgr.create_user("bitcraft1", "pw")
+        self.assertEqual(result, "pw")
 
     def test_get_user_sid(self) -> None:
         mgr = LocalUserManager()

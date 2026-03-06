@@ -35,13 +35,14 @@ def get_primary_steam_path() -> str:
 
 
 def _default_bitcraft_path(library_root: str) -> str:
-    return os.path.join(
-        library_root,
-        "steamapps",
-        "common",
-        "BitCraft Online",
-        "BitCraft.exe",
-    )
+    return os.path.join(library_root, "steamapps", "common", "BitCraft", "BitCraft.exe")
+
+
+def _candidate_default_paths(library_root: str) -> list[str]:
+    return [
+        os.path.join(library_root, "steamapps", "common", "BitCraft", "BitCraft.exe"),
+        os.path.join(library_root, "steamapps", "common", "BitCraft Online", "BitCraft.exe"),
+    ]
 
 
 def _extract_library_paths(vdf_text: str) -> list[str]:
@@ -58,16 +59,57 @@ def _library_contains_app(vdf_text: str, app_id: str) -> bool:
     return bool(re.search(rf'"{re.escape(app_id)}"\s+"\d+"', vdf_text))
 
 
+def _read_manifest_install_dir(library_root: str, app_id: str) -> str:
+    manifest_path = os.path.join(library_root, "steamapps", f"appmanifest_{app_id}.acf")
+    if not os.path.isfile(manifest_path):
+        return ""
+
+    with open(manifest_path, "r", encoding="utf-8", errors="ignore") as f:
+        text = f.read()
+
+    match = re.search(r'"installdir"\s+"([^"]+)"', text)
+    if not match:
+        return ""
+    return os.path.normpath(match.group(1).replace(r"\\", "\\").strip())
+
+
+def _resolve_bitcraft_path_from_manifest(library_root: str, app_id: str) -> str:
+    install_dir = _read_manifest_install_dir(library_root, app_id)
+    if not install_dir:
+        return ""
+
+    install_root = os.path.join(library_root, "steamapps", "common", install_dir)
+    direct_exe = os.path.join(install_root, "BitCraft.exe")
+    if os.path.isfile(direct_exe):
+        return direct_exe
+
+    # Fallback for unexpected executable names/layouts.
+    for root, _dirs, files in os.walk(install_root):
+        for file_name in files:
+            lowered = file_name.lower()
+            if lowered == "bitcraft.exe" or lowered.startswith("bitcraft") and lowered.endswith(".exe"):
+                return os.path.join(root, file_name)
+    return ""
+
+
 def find_bitcraft_install(steam_root: str, app_id: str = BITCRAFT_APP_ID) -> SteamInstallInfo:
     """Find BitCraft install by checking default path, then libraryfolders.vdf."""
     steam_root = os.path.normpath(steam_root)
 
-    default_path = _default_bitcraft_path(steam_root)
-    if os.path.isfile(default_path):
+    for default_path in _candidate_default_paths(steam_root):
+        if os.path.isfile(default_path):
+            return SteamInstallInfo(
+                steam_root=steam_root,
+                library_path=steam_root,
+                bitcraft_path=default_path,
+            )
+
+    manifest_path = _resolve_bitcraft_path_from_manifest(steam_root, app_id)
+    if manifest_path:
         return SteamInstallInfo(
             steam_root=steam_root,
             library_path=steam_root,
-            bitcraft_path=default_path,
+            bitcraft_path=manifest_path,
         )
 
     libraryfolders_path = os.path.join(steam_root, "steamapps", "libraryfolders.vdf")
@@ -78,18 +120,27 @@ def find_bitcraft_install(steam_root: str, app_id: str = BITCRAFT_APP_ID) -> Ste
         vdf_text = f.read()
 
     for library in _extract_library_paths(vdf_text):
-        candidate = _default_bitcraft_path(library)
-        if os.path.isfile(candidate):
+        for candidate in _candidate_default_paths(library):
+            if os.path.isfile(candidate):
+                return SteamInstallInfo(
+                    steam_root=steam_root,
+                    library_path=library,
+                    bitcraft_path=candidate,
+                )
+
+        manifest_candidate = _resolve_bitcraft_path_from_manifest(library, app_id)
+        if manifest_candidate:
             return SteamInstallInfo(
                 steam_root=steam_root,
                 library_path=library,
-                bitcraft_path=candidate,
+                bitcraft_path=manifest_candidate,
             )
 
     # Fallback: if app id appears in VDF but executable path differs unexpectedly, report a clear error.
     if _library_contains_app(vdf_text, app_id):
         raise SteamLocatorError(
-            f"BitCraft app id {app_id} found in library metadata, but BitCraft.exe path was not resolved."
+            f"BitCraft app id {app_id} was found in Steam library metadata, but the executable path "
+            "could not be resolved from known defaults or appmanifest installdir."
         )
 
     raise SteamLocatorError(f"BitCraft app id {app_id} was not found in any Steam library.")
