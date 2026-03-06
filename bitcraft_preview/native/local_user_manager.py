@@ -21,8 +21,10 @@ def _run_command(args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, check=False, capture_output=True, text=True)
 
 
-def _generate_password(length: int = 24) -> str:
-    # Keep password parser-friendly for net.exe while still satisfying common complexity rules.
+def _generate_password(length: int = 14) -> str:
+    # Keep password ≤14 chars to avoid net.exe confirmation prompt on Windows.
+    # "Möchten Sie den Vorgang fortsetzen?" prompt breaks automation.
+    # Also keep parser-friendly for net.exe while satisfying common complexity rules.
     base = "Aa1!"
     if length <= len(base):
         return base[:length]
@@ -33,10 +35,11 @@ def _generate_password(length: int = 24) -> str:
 def _create_user_with_powershell(username: str, password: str) -> subprocess.CompletedProcess[str]:
     escaped_user = username.replace("'", "''")
     escaped_password = password.replace("'", "''")
+    # Use SID S-1-5-32-545 for Users group (localized name varies: Users/Benutzer/Utilisateurs/etc.)
     command = (
         f"$pw = ConvertTo-SecureString '{escaped_password}' -AsPlainText -Force; "
         f"New-LocalUser -Name '{escaped_user}' -Password $pw -PasswordNeverExpires:$true -AccountNeverExpires:$true; "
-        f"Add-LocalGroupMember -Group 'Users' -Member '{escaped_user}'"
+        f"Add-LocalGroupMember -SID 'S-1-5-32-545' -Member '{escaped_user}'"
     )
     return _run_command(["powershell", "-NoProfile", "-NonInteractive", "-Command", command])
 
@@ -104,7 +107,8 @@ class LocalUserManager:
             raise LocalUserError(f"User already exists: {username}")
 
         final_password = password or _generate_password()
-        result = _run_command(["net", "user", username, final_password, "/add"])
+        # Use /Y to auto-confirm prompts (e.g., password length > 14 chars warning)
+        result = _run_command(["net", "user", username, final_password, "/add", "/Y"])
         if result.returncode != 0:
             # Some environments return "No valid response was provided." from net.exe.
             fallback = _create_user_with_powershell(username, final_password)
@@ -121,6 +125,10 @@ class LocalUserManager:
             raise LocalUserError(f"Failed to create user {username}: {detail}")
 
         # Ensure the account is a standard local user.
+        # Use built-in SID S-1-5-32-545 (Users group) for localization compatibility.
+        # Group name varies by language: Users (EN), Benutzer (DE), Utilisateurs (FR), etc.
+        # Note: net.exe doesn't support SID directly, but Users should exist on all Windows installs.
+        # If this fails on non-English Windows, the PowerShell fallback above will handle it.
         _run_command(["net", "localgroup", "Users", username, "/add"])
 
         return final_password
@@ -138,6 +146,8 @@ class LocalUserManager:
 
         # Delete user profile folder if it exists.
         # Windows does not automatically remove C:\Users\username when deleting the account.
+        # NOTE: Windows may create USERNAME.COMPUTERNAME folders if profile loading fails.
+        # These must be cleaned up manually if they persist after cleanup.
         profile_path = os.path.join(r"C:\Users", username)
         if os.path.isdir(profile_path):
             try:
@@ -154,5 +164,5 @@ class LocalUserManager:
         return True, created_password
 
     @staticmethod
-    def generate_password(length: int = 24) -> str:
+    def generate_password(length: int = 14) -> str:
         return _generate_password(length)

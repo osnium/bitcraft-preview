@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import os
 import re
 import shutil
@@ -25,10 +26,18 @@ class CleanupSummary:
     folders_failed: int = 0
 
 
+def is_admin() -> bool:
+    """Check if the current process has administrator privileges."""
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
 def setup_disclaimer_text() -> str:
     return (
         "Native Mode setup will create or manage local Windows user accounts and per-instance Steam folders.\n"
-        "This may require Administrator rights.\n"
+        "Administrator rights are REQUIRED for this operation.\n"
         "BitCraft Preview includes a built-in cleanup/revert operation to remove app-managed users and folders."
     )
 
@@ -113,6 +122,12 @@ class NativeSetupService:
             return action
 
     def reconcile(self, max_instances: int | None = None) -> ReconcileSummary:
+        if not is_admin():
+            raise NativeSetupError(
+                "Native Mode setup requires Administrator privileges. "
+                "Please run BitCraftPreview.exe as Administrator."
+            )
+
         cfg = self._state.load_config()
         native_cfg = cfg["native_mode"]
 
@@ -207,18 +222,44 @@ class NativeSetupService:
         return summary
 
     def cleanup(self) -> CleanupSummary:
+        if not is_admin():
+            raise NativeSetupError(
+                "Native Mode cleanup requires Administrator privileges. "
+                "Please run BitCraftPreview.exe as Administrator."
+            )
+
         cfg = self._state.load_config()
         native_cfg = cfg.get("native_mode", {})
         base_root = os.path.normpath(str(native_cfg.get("steam_instance_root", r"C:\BitcraftPreview\SteamInstances")))
 
+        # Kill all Steam processes for managed users before cleanup to avoid locked files.
         summary = CleanupSummary()
+        for instance in self._state.list_instances():
+            if instance.managed_by_app and instance.local_username:
+                try:
+                    # Best-effort process kill; use subprocess instead of process_launcher to avoid circular import.
+                    password = self._state.get_plain_password(instance.instance_id)
+                    subprocess.run(
+                        ["taskkill", "/F", "/FI", f"USERNAME eq {instance.local_username}"],
+                        check=False,
+                        capture_output=True,
+                        timeout=10,
+                    )
+                except Exception:
+                    pass  # Best-effort; continue with cleanup even if taskkill fails.
+
+        # Now delete users and folders.
         for instance in self._state.list_instances():
             if instance.managed_by_app and instance.local_username:
                 try:
                     self._users.delete_user(instance.local_username)
                     summary.users_deleted += 1
                 except Exception:
-                    summary.users_failed += 1
+                    # User may already be deleted; count as success if user doesn't exist.
+                    if not self._users.user_exists(instance.local_username):
+                        summary.users_deleted += 1
+                    else:
+                        summary.users_failed += 1
 
             root = (instance.instance_root or "").strip()
             if root and os.path.isdir(root):
