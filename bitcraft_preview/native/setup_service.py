@@ -1,0 +1,244 @@
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import stat
+import subprocess
+from dataclasses import dataclass
+from datetime import datetime, timezone
+
+from .local_user_manager import LocalUserManager
+from .state_manager import NativeModeStateManager, ReconcileSummary
+from .steam_locator import find_bitcraft_install, get_primary_steam_path
+
+
+class NativeSetupError(RuntimeError):
+    pass
+
+
+@dataclass
+class CleanupSummary:
+    users_deleted: int = 0
+    users_failed: int = 0
+    folders_deleted: int = 0
+    folders_failed: int = 0
+
+
+def setup_disclaimer_text() -> str:
+    return (
+        "Native Mode setup will create or manage local Windows user accounts and per-instance Steam folders.\n"
+        "This may require Administrator rights.\n"
+        "BitCraft Preview includes a built-in cleanup/revert operation to remove app-managed users and folders."
+    )
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+class NativeSetupService:
+    """Provision/reconcile native instances and cleanup app-managed artifacts."""
+
+    def __init__(
+        self,
+        state: NativeModeStateManager | None = None,
+        user_manager: LocalUserManager | None = None,
+    ) -> None:
+        self._state = state or NativeModeStateManager()
+        self._users = user_manager or LocalUserManager()
+
+    @staticmethod
+    def _instance_id(index: int) -> str:
+        return f"steam{index}"
+
+    @staticmethod
+    def _local_username(index: int) -> str:
+        return f"bitcraft{index}"
+
+    @staticmethod
+    def _instance_root(base_root: str, index: int) -> str:
+        return os.path.join(base_root, f"Steam{index}")
+
+    @staticmethod
+    def _same_path(left: str, right: str) -> bool:
+        return os.path.normcase(os.path.normpath(left)) == os.path.normcase(os.path.normpath(right))
+
+    def _ensure_steamapps_link(self, link_path: str, target_path: str) -> str:
+        os.makedirs(os.path.dirname(link_path), exist_ok=True)
+
+        if os.path.lexists(link_path):
+            entry_stat = os.lstat(link_path)
+            is_reparse = bool(
+                getattr(entry_stat, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+            )
+
+            if os.path.islink(link_path) or is_reparse:
+                current_target = os.path.normpath(os.path.realpath(link_path))
+                if self._same_path(current_target, target_path):
+                    return "reused"
+                if os.path.isdir(link_path):
+                    os.rmdir(link_path)
+                else:
+                    os.unlink(link_path)
+                action = "repaired"
+            elif os.path.isdir(link_path):
+                if os.listdir(link_path):
+                    raise NativeSetupError(
+                        f"Cannot replace non-empty existing directory at steamapps link path: {link_path}"
+                    )
+                os.rmdir(link_path)
+                action = "repaired"
+            else:
+                os.remove(link_path)
+                action = "repaired"
+        else:
+            action = "created"
+
+        try:
+            os.symlink(target_path, link_path, target_is_directory=True)
+            return action
+        except OSError:
+            result = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", link_path, target_path],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                stderr = (result.stderr or "").strip()
+                stdout = (result.stdout or "").strip()
+                detail = stderr or stdout or f"exit code {result.returncode}"
+                raise NativeSetupError(f"Failed to create steamapps junction {link_path} -> {target_path}: {detail}")
+            return action
+
+    def reconcile(self, max_instances: int | None = None) -> ReconcileSummary:
+        cfg = self._state.load_config()
+        native_cfg = cfg["native_mode"]
+
+        configured_count = int(max_instances if max_instances is not None else native_cfg.get("max_instances", 8))
+        if configured_count <= 0:
+            raise NativeSetupError("max_instances must be a positive integer")
+
+        base_root = os.path.normpath(str(native_cfg.get("steam_instance_root", r"C:\BitcraftPreview\SteamInstances")))
+        os.makedirs(base_root, exist_ok=True)
+
+        steam_root = get_primary_steam_path()
+        install = find_bitcraft_install(steam_root)
+        steam_exe_source = os.path.join(steam_root, "steam.exe")
+        if not os.path.isfile(steam_exe_source):
+            raise NativeSetupError(f"steam.exe not found at expected path: {steam_exe_source}")
+
+        steamapps_target = os.path.join(install.library_path, "steamapps")
+        if not os.path.isdir(steamapps_target):
+            raise NativeSetupError(f"Steam library steamapps directory missing: {steamapps_target}")
+
+        summary = ReconcileSummary(run_at=_utc_now_iso())
+
+        for idx in range(1, configured_count + 1):
+            instance_id = self._instance_id(idx)
+            username = self._local_username(idx)
+            instance_root = self._instance_root(base_root, idx)
+            steam_exe_path = os.path.join(instance_root, "steam.exe")
+            steamapps_link_path = os.path.join(instance_root, "steamapps")
+
+            existing = self._state.get_instance(instance_id)
+            if existing is None:
+                existing = self._state.get_instance_by_username(username)
+
+            known_password = ""
+            if existing is not None:
+                try:
+                    known_password = self._state.get_plain_password(existing.instance_id)
+                except Exception:
+                    known_password = ""
+
+            created, password = self._users.ensure_user(username, known_password or None)
+            if created:
+                summary.users_created += 1
+            else:
+                summary.users_reused += 1
+
+            final_password = password or known_password
+            if not final_password:
+                raise NativeSetupError(
+                    f"No managed password available for existing user '{username}'. "
+                    "Reset password manually and rerun setup."
+                )
+
+            if os.path.isdir(instance_root):
+                summary.folders_reused += 1
+            else:
+                os.makedirs(instance_root, exist_ok=True)
+                summary.folders_created += 1
+
+            if not os.path.isfile(steam_exe_path):
+                shutil.copy2(steam_exe_source, steam_exe_path)
+                summary.folders_repaired += 1
+
+            link_action = self._ensure_steamapps_link(steamapps_link_path, steamapps_target)
+            if link_action == "created":
+                summary.folders_created += 1
+            elif link_action == "repaired":
+                summary.folders_repaired += 1
+            else:
+                summary.folders_reused += 1
+
+            sid = self._users.get_user_sid(username)
+            self._state.upsert_instance(
+                instance_id=instance_id,
+                local_username=username,
+                plain_password=final_password,
+                local_user_sid=sid,
+                instance_root=instance_root,
+                steam_exe_path=steam_exe_path,
+                steamapps_link_path=steamapps_link_path,
+                steamapps_link_target=steamapps_target,
+                status="ready",
+            )
+
+        cfg = self._state.load_config()
+        cfg["native_mode"]["enabled"] = True
+        cfg["native_mode"]["setup_completed"] = True
+        cfg["native_mode"]["max_instances"] = configured_count
+        cfg["mode"] = "native"
+        self._state.save_config(cfg)
+        self._state.set_last_reconcile(summary)
+        return summary
+
+    def cleanup(self) -> CleanupSummary:
+        cfg = self._state.load_config()
+        native_cfg = cfg.get("native_mode", {})
+        base_root = os.path.normpath(str(native_cfg.get("steam_instance_root", r"C:\BitcraftPreview\SteamInstances")))
+
+        summary = CleanupSummary()
+        for instance in self._state.list_instances():
+            if instance.managed_by_app and instance.local_username:
+                try:
+                    self._users.delete_user(instance.local_username)
+                    summary.users_deleted += 1
+                except Exception:
+                    summary.users_failed += 1
+
+            root = (instance.instance_root or "").strip()
+            if root and os.path.isdir(root):
+                normalized_root = os.path.normpath(root)
+                safe_root = False
+                try:
+                    safe_root = self._same_path(os.path.commonpath([base_root, normalized_root]), base_root)
+                except ValueError:
+                    safe_root = False
+
+                if safe_root and re.search(r"[\\/]Steam\d+$", normalized_root, re.IGNORECASE):
+                    try:
+                        shutil.rmtree(normalized_root)
+                        summary.folders_deleted += 1
+                    except Exception:
+                        summary.folders_failed += 1
+
+        native_cfg["instances"] = []
+        native_cfg["enabled"] = False
+        native_cfg["setup_completed"] = False
+        cfg["mode"] = "sandboxie"
+        self._state.save_config(cfg)
+        return summary

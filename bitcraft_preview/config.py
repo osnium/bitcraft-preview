@@ -8,6 +8,8 @@ logger = logging.getLogger("bitcraft_preview")
 
 # Default values
 DEFAULT_CONFIG = {
+    "version": "2.1",
+    "mode": "sandboxie",
     "UserSettings": {
         "inline_label": True,                 # Needs Restart
         "preview_opacity": 0.8,               # Live
@@ -26,6 +28,27 @@ DEFAULT_CONFIG = {
         "log_dir_name": "BitCraftPreview",
         "log_file_name": "bitcraft_preview.log",
         "debug": False                        # Needs Restart
+    },
+    "native_mode": {
+        "enabled": False,
+        "setup_completed": False,
+        "setup_date": "",
+        "max_instances": 8,
+        "steam_instance_root": r"C:\BitcraftPreview\SteamInstances",
+        "steam_root_policy": "central_root",
+        "instances": [],
+        "last_reconcile": {
+            "run_at": "",
+            "users_reused": 0,
+            "users_created": 0,
+            "folders_reused": 0,
+            "folders_created": 0,
+            "folders_repaired": 0,
+        },
+    },
+    "sandboxie_mode": {
+        "enabled": True,
+        "instances": [],
     }
 }
 
@@ -47,27 +70,68 @@ def get_config_file_path() -> str:
     return config_file_path
 
 def load_config():
-    config = copy.deepcopy(DEFAULT_CONFIG)
+    merged_config = copy.deepcopy(DEFAULT_CONFIG)
     if os.path.exists(config_file_path):
         try:
             with open(config_file_path, "r") as f:
                 user_config = json.load(f)
-                # Merge settings
-                if "UserSettings" in user_config:
-                    config["UserSettings"].update(user_config["UserSettings"])
-                if "SystemSettings" in user_config:
-                    config["SystemSettings"].update(user_config["SystemSettings"])
+
+                # Preserve any custom top-level keys, then apply default sections.
+                if isinstance(user_config, dict):
+                    merged_config = copy.deepcopy(user_config)
+
+                if "UserSettings" not in merged_config or not isinstance(merged_config["UserSettings"], dict):
+                    merged_config["UserSettings"] = {}
+                if "SystemSettings" not in merged_config or not isinstance(merged_config["SystemSettings"], dict):
+                    merged_config["SystemSettings"] = {}
+
+                if "native_mode" not in merged_config or not isinstance(merged_config["native_mode"], dict):
+                    merged_config["native_mode"] = {}
+                if "sandboxie_mode" not in merged_config or not isinstance(merged_config["sandboxie_mode"], dict):
+                    merged_config["sandboxie_mode"] = {}
+
+                # Merge known sections while retaining unknown fields from disk.
+                default_user = DEFAULT_CONFIG["UserSettings"]
+                default_system = DEFAULT_CONFIG["SystemSettings"]
+                default_native = DEFAULT_CONFIG["native_mode"]
+                default_sandboxie = DEFAULT_CONFIG["sandboxie_mode"]
+
+                merged_user = copy.deepcopy(default_user)
+                merged_user.update(merged_config["UserSettings"])
+                merged_config["UserSettings"] = merged_user
+
+                merged_system = copy.deepcopy(default_system)
+                merged_system.update(merged_config["SystemSettings"])
+                merged_config["SystemSettings"] = merged_system
+
+                merged_native = copy.deepcopy(default_native)
+                merged_native.update(merged_config["native_mode"])
+                if not isinstance(merged_native.get("last_reconcile"), dict):
+                    merged_native["last_reconcile"] = {}
+                reconcile = copy.deepcopy(default_native["last_reconcile"])
+                reconcile.update(merged_native["last_reconcile"])
+                merged_native["last_reconcile"] = reconcile
+                merged_config["native_mode"] = merged_native
+
+                merged_sandboxie = copy.deepcopy(default_sandboxie)
+                merged_sandboxie.update(merged_config["sandboxie_mode"])
+                merged_config["sandboxie_mode"] = merged_sandboxie
+
+                if "version" not in merged_config:
+                    merged_config["version"] = DEFAULT_CONFIG["version"]
+                if "mode" not in merged_config:
+                    merged_config["mode"] = DEFAULT_CONFIG["mode"]
         except Exception as e:
             logger.error(f"Error reading config file '{config_file_path}': {e}")
     else:
         # Create default config file if it doesn't exist
-        save_config(config)
+        save_config(merged_config)
     
     # Clamp zoom percentage
-    zoom = config["UserSettings"]["hover_zoom_percent"]
-    config["UserSettings"]["hover_zoom_percent"] = max(100, min(500, zoom))
+    zoom = merged_config["UserSettings"]["hover_zoom_percent"]
+    merged_config["UserSettings"]["hover_zoom_percent"] = max(100, min(500, zoom))
     
-    return config
+    return merged_config
 
 def save_config(config):
     try:
@@ -111,3 +175,8 @@ def get_switch_window_enabled():
 def get_switch_window_hotkey(): return str(load_config()["UserSettings"].get("switch_window_hotkey", "MOUSE5"))
 def get_preview_tile_width(): return max(100, int(load_config()["UserSettings"]["preview_tile_width"]))
 def get_preview_tile_height(): return max(60, int(load_config()["UserSettings"]["preview_tile_height"]))
+
+
+def get_current_mode() -> str:
+    mode = str(load_config().get("mode", "sandboxie")).strip().lower()
+    return mode if mode in {"native", "sandboxie"} else "sandboxie"
