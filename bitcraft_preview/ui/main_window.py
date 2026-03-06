@@ -57,7 +57,7 @@ class MainWindow(QMainWindow):
         for index, window in enumerate(windows):
             if window.hwnd not in self.tiles:
                 # Add new
-                label_text = display_label(window.title)
+                label_text = display_label(window.title, window.pid)
                 tile = LivePreviewTile(window.hwnd, label_text)
                 self.tiles[window.hwnd] = tile
                 row = index // 2
@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
             else:
                 # Update position based on sorting
                 tile = self.tiles[window.hwnd]
-                label_text = display_label(window.title)
+                label_text = display_label(window.title, window.pid)
                 if tile.label_text != label_text:
                     tile.label_text = label_text
                     tile.label.setText(label_text)
