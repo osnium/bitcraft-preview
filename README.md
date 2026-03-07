@@ -6,6 +6,10 @@ A Windows-only utility to display **live DWM previews** of multiple BitCraft gam
 
 This project is built directly for Windows using pure DWM API and PySide6 for minimal window overhead.
 
+> **Stable version:** 0.2.3 (see Releases)  
+> **No-Sandboxie solution:** use the prerelease **V0.3.0-alpha**: https://github.com/osnium/bitcraft-preview/releases/tag/V0.3.0-alpha
+
+
 ## Features
 
 - **Live Previews**: Uses Windows Desktop Window Manager (`DWM`) thumbnails to show true, low-latency live feeds of all your BitCraft clients at once.
