@@ -1,2 +1,5 @@
 """BitCraft Preview package."""
-__version__ = "0.2.3"
+
+from .version import get_app_version
+
+__all__ = ["get_app_version"]

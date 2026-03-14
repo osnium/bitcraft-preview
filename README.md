@@ -215,6 +215,13 @@ pyinstaller.exe .\BitCraftPreview.spec --noconfirm
 
 The packaged output is written to `dist\BitCraftPreview\`.
 
+## Versioning
+
+App release version uses `pyproject.toml` as the single source of truth.
+
+- Bump version only in `pyproject.toml` under `[project].version`.
+- Do not add or edit a separate hardcoded app `__version__` constant.
+
 ## Credits
 
 - Icons created by XATE Media ([xate.eu](https://xate.eu))

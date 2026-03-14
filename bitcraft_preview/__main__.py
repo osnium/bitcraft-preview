@@ -6,6 +6,7 @@ import sys
 
 from bitcraft_preview.config import DEBUG, ensure_config_exists, get_config_file_path
 from bitcraft_preview.logging_setup import init_logging
+from bitcraft_preview.version import get_app_version
 from bitcraft_preview.native import (
     NativeProcessControlError,
     NativeProcessController,
@@ -30,6 +31,7 @@ def get_asset_path(asset_name):
 def _run_native_cli(args) -> None:
     # Initialize logging for CLI operations to ensure debug info is captured.
     logger = init_logging()
+    logger.info("Starting BitCraft Preview native CLI v%s", get_app_version())
     if ensure_config_exists():
         logger.info("Using config file: %s", get_config_file_path())
     
@@ -160,7 +162,7 @@ def main():
     from bitcraft_preview.ui.overlay_manager import OverlayManager
 
     logger = init_logging()
-    logger.info("Starting BitCraft Preview application")
+    logger.info("Starting BitCraft Preview application v%s", get_app_version())
     if ensure_config_exists():
         logger.info("Using config file: %s", get_config_file_path())
     else:

@@ -17,7 +17,7 @@ class ConfigUpdateTests(unittest.TestCase):
             
             # Simulate old config missing a new setting
             old_config = {
-                "version": "2.1",
+                "version": config.DEFAULT_CONFIG["version"],
                 "mode": "sandboxie",
                 "UserSettings": {
                     "inline_label": True,
@@ -62,7 +62,7 @@ class ConfigUpdateTests(unittest.TestCase):
             
             # Simulate old native mode config missing new fields
             old_config = {
-                "version": "2.1",
+                "version": config.DEFAULT_CONFIG["version"],
                 "mode": "native",
                 "UserSettings": config.DEFAULT_CONFIG["UserSettings"].copy(),
                 "SystemSettings": config.DEFAULT_CONFIG["SystemSettings"].copy(),

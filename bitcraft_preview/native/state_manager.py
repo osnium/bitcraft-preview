@@ -45,8 +45,6 @@ class NativeInstance:
 class NativeModeStateManager:
     """Load and persist Native Mode state inside unified config.json."""
 
-    SCHEMA_VERSION = "2.1"
-
     def __init__(self, machine_scope_passwords: bool = True) -> None:
         self._machine_scope_passwords = machine_scope_passwords
 
@@ -54,7 +52,7 @@ class NativeModeStateManager:
         cfg = config.load_config()
 
         if "version" not in cfg:
-            cfg["version"] = self.SCHEMA_VERSION
+            cfg["version"] = config.DEFAULT_CONFIG["version"]
         if "mode" not in cfg:
             cfg["mode"] = "sandboxie"
 

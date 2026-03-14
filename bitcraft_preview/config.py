@@ -4,11 +4,14 @@ import logging
 import copy
 import sys
 
+from bitcraft_preview.version import get_app_version
+
 logger = logging.getLogger("bitcraft_preview")
+APP_VERSION = get_app_version()
 
 # Default values
 DEFAULT_CONFIG = {
-    "version": "2.1",
+    "version": APP_VERSION,
     "mode": "sandboxie",
     "UserSettings": {
         "inline_label": True,                 # Needs Restart
@@ -143,8 +146,8 @@ def load_config():
                     config_updated = True
                 merged_config["sandboxie_mode"] = merged_sandboxie
 
-                if "version" not in merged_config:
-                    merged_config["version"] = DEFAULT_CONFIG["version"]
+                if merged_config.get("version") != APP_VERSION:
+                    merged_config["version"] = APP_VERSION
                     config_updated = True
                 if "mode" not in merged_config:
                     merged_config["mode"] = DEFAULT_CONFIG["mode"]
