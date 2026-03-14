@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 import time
+import winreg
 from dataclasses import dataclass
 from typing import List
 
@@ -11,8 +13,40 @@ import psutil
 from .process_launcher import ProcessLauncher
 from .state_manager import NativeInstance, NativeModeStateManager
 
+logger = logging.getLogger(__name__)
 
 APP_ID_BITCRAFT = 3454650
+
+
+def _wait_for_profile_unloaded(sid: str, timeout: float = 15.0) -> None:
+    """Block until Windows has fully unloaded the user profile hive for *sid*.
+
+    Windows keeps ``HKEY_USERS\\<sid>`` open while a profile is loaded.
+    Polling for that key to disappear guarantees that ``CreateProcessWithLogonW``
+    will not race profile teardown and create a suffixed fallback folder such as
+    ``bitcraft1.PCName`` or ``bitcraft1.PCName.000``.
+
+    Falls back to a 2-second sleep when no SID is stored.
+    """
+    if not sid:
+        logger.debug("_wait_for_profile_unloaded: no SID stored, falling back to sleep(2)")
+        time.sleep(2)
+        return
+    logger.debug("_wait_for_profile_unloaded: waiting for profile hive SID=%s to unload", sid)
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            key = winreg.OpenKey(winreg.HKEY_USERS, sid)
+            winreg.CloseKey(key)
+            time.sleep(0.25)  # profile still loaded, keep polling
+        except OSError:
+            logger.debug("_wait_for_profile_unloaded: profile hive SID=%s unloaded", sid)
+            return
+    logger.warning(
+        "_wait_for_profile_unloaded: timed out after %.1fs waiting for SID=%s; proceeding anyway",
+        timeout,
+        sid,
+    )
 
 
 class NativeProcessControlError(RuntimeError):
@@ -208,15 +242,26 @@ class NativeProcessController:
         password = self._state.get_plain_password(instance.instance_id)
 
         if restart_mode or userchooser_mode or pre_kill:
+            logger.debug(
+                "Pre-launch kill: instance=%s user=%s restart=%s chooser=%s",
+                instance.instance_id, instance.local_username, restart_mode, userchooser_mode,
+            )
             # Force-kill all Steam/BitCraft processes for this user before launching.
             # This avoids stale CEF state, IPC conflicts, and ensures clean startup.
             self.force_kill_instance_processes(instance.instance_id, timeout=10.0)
-            # Brief additional wait for filesystem/registry cleanup after process termination.
-            time.sleep(2)
+            # Wait for Windows to fully unload the user profile before relaunching.
+            # Without this, CreateProcessWithLogonW races profile teardown and causes
+            # Windows to create a suffixed fallback folder (e.g. bitcraft1.PCName).
+            _wait_for_profile_unloaded(instance.local_user_sid, timeout=15.0)
 
         override = self._master_override_name(instance.instance_id)
         working_dir = os.path.dirname(instance.steam_exe_path) if instance.steam_exe_path else None
-        
+
+        logger.debug(
+            "Launching Steam: instance=%s user=%s mode=%s",
+            instance.instance_id, instance.local_username,
+            "userchooser" if userchooser_mode else "silent",
+        )
         if userchooser_mode:
             args = f"-master_ipc_name_override {override} -userchooser"
             steam_pid = self._launcher.launch_foreground(
@@ -236,6 +281,7 @@ class NativeProcessController:
                 working_directory=working_dir,
             )
 
+        logger.debug("Steam launched: instance=%s steam_pid=%d", instance.instance_id, steam_pid)
         return LaunchResult(
             steam_pid=steam_pid,
             instance_id=instance.instance_id,
@@ -244,11 +290,25 @@ class NativeProcessController:
 
     def launch_instance(self, instance_ref: str) -> LaunchResult:
         instance = self._resolve_instance(instance_ref)
-        return self._launch(instance, userchooser_mode=False, restart_mode=False, pre_kill=True)
+        return self._launch(instance, userchooser_mode=False, restart_mode=False, pre_kill=False)
 
     def restart_instance(self, instance_ref: str) -> LaunchResult:
         instance = self._resolve_instance(instance_ref)
         return self._launch(instance, userchooser_mode=False, restart_mode=True)
+
+    def launch_or_restart(self, instance_ref: str) -> tuple[LaunchResult, bool]:
+        """Launch if not running, restart (kill + profile-unload wait + relaunch) if running.
+
+        Returns ``(result, was_restart)`` so callers can log the correct verb.
+        """
+        instance = self._resolve_instance(instance_ref)
+        running = self.is_instance_running(instance_ref)
+        logger.debug(
+            "launch_or_restart: instance=%s running=%s -> %s",
+            instance.instance_id, running, "restart" if running else "launch",
+        )
+        result = self._launch(instance, userchooser_mode=False, restart_mode=running, pre_kill=False)
+        return result, running
 
     def open_user_chooser(self, instance_ref: str) -> LaunchResult:
         instance = self._resolve_instance(instance_ref)

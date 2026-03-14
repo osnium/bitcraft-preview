@@ -268,31 +268,22 @@ def main():
         except Exception as e:
             _show_native_action_error("Set Overlay Name Error", e)
 
-    def _launch_instance_from_tray(instance_id: str) -> None:
+    def _launch_or_restart_from_tray(instance_id: str) -> None:
         try:
-            result = NativeProcessController().launch_instance(instance_id)
-            message = f"Launched {result.instance_id} ({result.local_username}) steam_pid={result.steam_pid}"
-            logger.info(message)
+            result, was_restart = NativeProcessController().launch_or_restart(instance_id)
+            verb = "Restarted" if was_restart else "Launched"
+            logger.info("%s %s (%s) steam_pid=%s", verb, result.instance_id, result.local_username, result.steam_pid)
             if DEBUG:
-                QMessageBox.information(None, "Native Launch", message)
+                QMessageBox.information(
+                    None,
+                    f"Native {verb}",
+                    f"{verb} {result.instance_id} ({result.local_username}) steam_pid={result.steam_pid}",
+                )
         except NativeProcessControlError as e:
-            _show_native_action_error("Native Launch Error", e)
+            _show_native_action_error("Native Launch/Restart Error", e)
         except Exception as e:
-            logger.exception("Unexpected tray native launch error")
-            _show_native_action_error("Native Launch Error", e)
-
-    def _restart_instance_from_tray(instance_id: str) -> None:
-        try:
-            result = NativeProcessController().restart_instance(instance_id)
-            message = f"Restarted {result.instance_id} ({result.local_username}) steam_pid={result.steam_pid}"
-            logger.info(message)
-            if DEBUG:
-                QMessageBox.information(None, "Native Restart", message)
-        except NativeProcessControlError as e:
-            _show_native_action_error("Native Restart Error", e)
-        except Exception as e:
-            logger.exception("Unexpected tray native restart error")
-            _show_native_action_error("Native Restart Error", e)
+            logger.exception("Unexpected tray launch/restart error")
+            _show_native_action_error("Native Launch/Restart Error", e)
 
     def _open_user_chooser_from_tray(instance_id: str) -> None:
         try:
@@ -417,16 +408,16 @@ def main():
         
         native_accounts_menu.addSeparator()
 
+        controller = NativeProcessController()
         for instance in instances:
             account_menu = QMenu(_instance_menu_label(instance), native_accounts_menu)
 
-            launch_action = QAction("Launch", app)
-            launch_action.triggered.connect(lambda _checked=False, instance_id=instance.instance_id: _launch_instance_from_tray(instance_id))
-            account_menu.addAction(launch_action)
-
-            restart_action = QAction("Restart", app)
-            restart_action.triggered.connect(lambda _checked=False, instance_id=instance.instance_id: _restart_instance_from_tray(instance_id))
-            account_menu.addAction(restart_action)
+            is_running = controller.is_instance_running(instance.instance_id)
+            launch_restart_action = QAction("Restart" if is_running else "Launch", app)
+            launch_restart_action.triggered.connect(
+                lambda _checked=False, instance_id=instance.instance_id: _launch_or_restart_from_tray(instance_id)
+            )
+            account_menu.addAction(launch_restart_action)
 
             chooser_action = QAction("Open Account Chooser", app)
             chooser_action.triggered.connect(
