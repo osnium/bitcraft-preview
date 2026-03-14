@@ -123,11 +123,12 @@ class NativeProcessController:
             
             time.sleep(0.2)  # Short polling interval
 
-    def kill_all_instances(self, timeout: float = 10.0) -> int:
+    def kill_all_instances(self, timeout: float = 10.0, kill_interval: float = 0.1) -> int:
         """Force-kill all Steam and BitCraft processes for ALL configured native instances.
         
         Args:
             timeout: Maximum seconds to wait for processes to terminate
+            kill_interval: Delay in seconds between killing each process
             
         Returns:
             Number of processes killed
@@ -161,12 +162,14 @@ class NativeProcessController:
         if not processes_to_kill:
             return 0
         
-        # Force-kill all matching processes
-        for proc in processes_to_kill:
+        # Force-kill all matching processes with slight staggering to reduce system disruption.
+        for index, proc in enumerate(processes_to_kill):
             try:
                 proc.kill()
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
+            if kill_interval > 0 and index < len(processes_to_kill) - 1:
+                time.sleep(kill_interval)
         
         # Wait for them to actually terminate
         start_time = time.time()

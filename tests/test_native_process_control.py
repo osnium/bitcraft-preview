@@ -23,10 +23,46 @@ class _FakeState:
     def get_plain_password(self, instance_id: str):
         return "pw"
 
+    def list_instances(self):
+        return [self.instance]
+
 
 class _Proc:
     def __init__(self, name: str, username: str):
         self.info = {"name": name, "username": username}
+
+
+class _KillProc:
+    def __init__(self, name: str, username: str) -> None:
+        self.info = {"name": name, "username": username, "pid": 1234}
+        self._running = True
+
+    def kill(self) -> None:
+        self._running = False
+
+    def is_running(self) -> bool:
+        return self._running
+
+
+class _KillAllState:
+    def __init__(self) -> None:
+        self.instances = [
+            NativeInstance(
+                instance_id="steam1",
+                local_username="bitcraft1",
+                steam_exe_path=r"C:\BitcraftPreview\SteamInstances\Steam1\steam.exe",
+                status="ready",
+            ),
+            NativeInstance(
+                instance_id="steam2",
+                local_username="bitcraft2",
+                steam_exe_path=r"C:\BitcraftPreview\SteamInstances\Steam2\steam.exe",
+                status="ready",
+            ),
+        ]
+
+    def list_instances(self):
+        return self.instances
 
 
 class _FakeLauncher:
@@ -113,6 +149,40 @@ class NativeProcessControlTests(unittest.TestCase):
         mode, kwargs = launcher.calls[0]
         self.assertEqual(mode, "foreground")
         self.assertIn("-userchooser", kwargs["args"])
+
+    def test_kill_all_instances_applies_delay_between_kills(self) -> None:
+        controller = NativeProcessController(state=_KillAllState())
+        procs = [
+            _KillProc("steam.exe", "MACHINE\\bitcraft1"),
+            _KillProc("BitCraft.exe", "MACHINE\\bitcraft2"),
+            _KillProc("steam.exe", "MACHINE\\bitcraft3"),
+        ]
+
+        with patch("bitcraft_preview.native.process_control.psutil.process_iter", return_value=procs), patch(
+            "bitcraft_preview.native.process_control.time.sleep"
+        ) as sleep_mock:
+            killed = controller.kill_all_instances(timeout=10.0, kill_interval=0.1)
+
+        self.assertEqual(killed, 2)
+        for proc in procs[:2]:
+            self.assertFalse(proc.is_running())
+        self.assertTrue(procs[2].is_running())
+        sleep_mock.assert_any_call(0.1)
+
+    def test_kill_all_instances_skips_delay_when_interval_zero(self) -> None:
+        controller = NativeProcessController(state=_KillAllState())
+        procs = [
+            _KillProc("steam.exe", "MACHINE\\bitcraft1"),
+            _KillProc("BitCraft.exe", "MACHINE\\bitcraft2"),
+        ]
+
+        with patch("bitcraft_preview.native.process_control.psutil.process_iter", return_value=procs), patch(
+            "bitcraft_preview.native.process_control.time.sleep"
+        ) as sleep_mock:
+            killed = controller.kill_all_instances(timeout=10.0, kill_interval=0.0)
+
+        self.assertEqual(killed, 2)
+        sleep_mock.assert_not_called()
 
 
 if __name__ == "__main__":
