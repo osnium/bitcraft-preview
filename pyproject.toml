@@ -4,8 +4,8 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "bitcraft_preview"
-version = "0.1.0"
-description = "A preview tool for BitCraft"
+version = "0.3.0"
+description = "A Multibox tool for Bitcraft"
 dependencies = [
     "PySide6",
     "psutil",

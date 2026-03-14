@@ -131,7 +131,7 @@ class OverlayManager:
 
         # Add or update windows
         for window in windows:
-            label_text = display_label(window.title)
+            label_text = display_label(window.title, window.pid)
             if window.hwnd not in self.overlays:
                 overlay = LivePreviewTile(window.hwnd, label_text)
                 self.overlays[window.hwnd] = overlay
@@ -144,6 +144,8 @@ class OverlayManager:
                 
             else:
                 overlay = self.overlays[window.hwnd]
+                # Re-compute label in case config changed
+                label_text = display_label(window.title, window.pid)
                 if overlay.label_text != label_text:
                     overlay.label_text = label_text
                     overlay.label.setText(label_text)
