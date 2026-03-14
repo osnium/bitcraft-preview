@@ -12,6 +12,7 @@ from bitcraft_preview.native import (
     NativeModeStateManager,
     NativeSetupError,
     NativeSetupService,
+    is_admin,
     setup_disclaimer_text,
 )
 
@@ -465,6 +466,18 @@ def main():
         log_path = os.path.join(os.environ.get("LOCALAPPDATA", ""), "BitCraftPreview", "bitcraft_preview.log")
         _open_file_path(log_path, "Open Log Error")
 
+    def _require_native_admin(operation_name: str) -> bool:
+        if is_admin():
+            return True
+
+        message = (
+            f"Native Mode {operation_name} requires Administrator privileges. "
+            "Please run BitCraftPreview.exe as Administrator."
+        )
+        logger.warning("Blocked native %s because process is not elevated", operation_name)
+        QMessageBox.warning(None, "Administrator Privileges Required", message)
+        return False
+
     def _confirm_native_account_changes(operation_name: str) -> bool:
         text = f"{setup_disclaimer_text()}\n\nProceed with {operation_name}?"
         choice = QMessageBox.warning(
@@ -477,6 +490,9 @@ def main():
         return choice == QMessageBox.StandardButton.Yes
 
     def _run_native_setup_from_tray() -> None:
+        if not _require_native_admin("setup"):
+            return
+
         count, ok = QInputDialog.getInt(
             None,
             "Native Mode Setup",
@@ -510,6 +526,9 @@ def main():
             QMessageBox.critical(None, "Native Setup Error", str(e))
 
     def _run_native_cleanup_from_tray() -> None:
+        if not _require_native_admin("cleanup"):
+            return
+
         if not _confirm_native_account_changes("Native cleanup"):
             return
 
