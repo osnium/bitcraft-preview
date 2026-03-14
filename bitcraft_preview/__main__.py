@@ -77,10 +77,24 @@ def _run_native_cli(args) -> None:
             result = controller.restart_instance(args.native_restart)
             logger.info("Restarted %s (%s) steam_pid=%s", result.instance_id, result.local_username, result.steam_pid)
             print(f"Restarted {result.instance_id} ({result.local_username}) steam_pid={result.steam_pid}")
+        elif args.native_userchooser:
+            result = controller.open_user_chooser(args.native_userchooser)
+            logger.info(
+                "Opened account chooser for %s (%s) steam_pid=%s",
+                result.instance_id,
+                result.local_username,
+                result.steam_pid,
+            )
+            print(f"Opened account chooser for {result.instance_id} ({result.local_username}) steam_pid={result.steam_pid}")
         elif args.native_relogin:
             result = controller.relogin_instance(args.native_relogin)
-            logger.info("Re-login launched %s (%s) steam_pid=%s", result.instance_id, result.local_username, result.steam_pid)
-            print(f"Re-login launched {result.instance_id} ({result.local_username}) steam_pid={result.steam_pid}")
+            logger.info(
+                "Opened account chooser for %s (%s) via legacy relogin flag steam_pid=%s",
+                result.instance_id,
+                result.local_username,
+                result.steam_pid,
+            )
+            print(f"Opened account chooser for {result.instance_id} ({result.local_username}) steam_pid={result.steam_pid}")
     except NativeSetupError as e:
         logger.error("Native setup error: %s", e)
         print(f"Native setup error: {e}")
@@ -99,7 +113,16 @@ def main():
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument("--native-launch", dest="native_launch", help="Launch native instance by instance_id or local username")
     parser.add_argument("--native-restart", dest="native_restart", help="Restart native instance by instance_id or local username")
-    parser.add_argument("--native-relogin", dest="native_relogin", help="Re-login native instance by instance_id or local username")
+    parser.add_argument(
+        "--native-userchooser",
+        dest="native_userchooser",
+        help="Open Steam account chooser for a native instance by instance_id or local username",
+    )
+    parser.add_argument(
+        "--native-relogin",
+        dest="native_relogin",
+        help="Legacy alias for --native-userchooser",
+    )
     parser.add_argument("--native-setup", dest="native_setup", type=int, help="Reconcile and provision native setup for N instances")
     parser.add_argument("--native-cleanup", dest="native_cleanup", action="store_true", help="Cleanup app-managed native users/folders")
     parser.add_argument(
@@ -113,6 +136,7 @@ def main():
     native_request = (
         args.native_launch
         or args.native_restart
+        or args.native_userchooser
         or args.native_relogin
         or args.native_setup is not None
         or args.native_cleanup
@@ -269,6 +293,19 @@ def main():
             logger.exception("Unexpected tray native restart error")
             _show_native_action_error("Native Restart Error", e)
 
+    def _open_user_chooser_from_tray(instance_id: str) -> None:
+        try:
+            result = NativeProcessController().open_user_chooser(instance_id)
+            message = f"Opened account chooser for {result.instance_id} ({result.local_username}) steam_pid={result.steam_pid}"
+            logger.info(message)
+            if DEBUG:
+                QMessageBox.information(None, "Native Account Chooser", message)
+        except NativeProcessControlError as e:
+            _show_native_action_error("Native Account Chooser Error", e)
+        except Exception as e:
+            logger.exception("Unexpected tray native account chooser error")
+            _show_native_action_error("Native Account Chooser Error", e)
+
     def _kill_instance_from_tray(instance_id: str) -> None:
         try:
             controller = NativeProcessController()
@@ -389,6 +426,12 @@ def main():
             restart_action = QAction("Restart", app)
             restart_action.triggered.connect(lambda _checked=False, instance_id=instance.instance_id: _restart_instance_from_tray(instance_id))
             account_menu.addAction(restart_action)
+
+            chooser_action = QAction("Open Account Chooser", app)
+            chooser_action.triggered.connect(
+                lambda _checked=False, instance_id=instance.instance_id: _open_user_chooser_from_tray(instance_id)
+            )
+            account_menu.addAction(chooser_action)
 
             kill_action = QAction("Kill", app)
             kill_action.triggered.connect(lambda _checked=False, instance_id=instance.instance_id: _kill_instance_from_tray(instance_id))

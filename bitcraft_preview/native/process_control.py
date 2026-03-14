@@ -27,7 +27,7 @@ class LaunchResult:
 
 
 class NativeProcessController:
-    """High-level launch/restart/relogin flow for Native Mode instances."""
+    """High-level launch/restart/account-chooser flow for Native Mode instances."""
 
     def __init__(self, state: NativeModeStateManager | None = None, launcher: ProcessLauncher | None = None) -> None:
         self._state = state or NativeModeStateManager()
@@ -194,10 +194,17 @@ class NativeProcessController:
         safe = re.sub(r"[^a-zA-Z0-9]", "", instance_id) or "steam"
         return f"steam{safe}"
 
-    def _launch(self, instance: NativeInstance, *, relogin_mode: bool, restart_mode: bool, pre_kill: bool = False) -> LaunchResult:
+    def _launch(
+        self,
+        instance: NativeInstance,
+        *,
+        userchooser_mode: bool,
+        restart_mode: bool,
+        pre_kill: bool = False,
+    ) -> LaunchResult:
         password = self._state.get_plain_password(instance.instance_id)
 
-        if restart_mode or relogin_mode or pre_kill:
+        if restart_mode or userchooser_mode or pre_kill:
             # Force-kill all Steam/BitCraft processes for this user before launching.
             # This avoids stale CEF state, IPC conflicts, and ensures clean startup.
             self.force_kill_instance_processes(instance.instance_id, timeout=10.0)
@@ -207,8 +214,8 @@ class NativeProcessController:
         override = self._master_override_name(instance.instance_id)
         working_dir = os.path.dirname(instance.steam_exe_path) if instance.steam_exe_path else None
         
-        if relogin_mode:
-            args = f"-master_ipc_name_override {override}"
+        if userchooser_mode:
+            args = f"-master_ipc_name_override {override} -userchooser"
             steam_pid = self._launcher.launch_foreground(
                 username=instance.local_username,
                 password=password,
@@ -234,12 +241,16 @@ class NativeProcessController:
 
     def launch_instance(self, instance_ref: str) -> LaunchResult:
         instance = self._resolve_instance(instance_ref)
-        return self._launch(instance, relogin_mode=False, restart_mode=False, pre_kill=True)
+        return self._launch(instance, userchooser_mode=False, restart_mode=False, pre_kill=True)
 
     def restart_instance(self, instance_ref: str) -> LaunchResult:
         instance = self._resolve_instance(instance_ref)
-        return self._launch(instance, relogin_mode=False, restart_mode=True)
+        return self._launch(instance, userchooser_mode=False, restart_mode=True)
+
+    def open_user_chooser(self, instance_ref: str) -> LaunchResult:
+        instance = self._resolve_instance(instance_ref)
+        return self._launch(instance, userchooser_mode=True, restart_mode=True)
 
     def relogin_instance(self, instance_ref: str) -> LaunchResult:
-        instance = self._resolve_instance(instance_ref)
-        return self._launch(instance, relogin_mode=True, restart_mode=True)
+        # Backward-compatible alias for the legacy CLI/API surface.
+        return self.open_user_chooser(instance_ref)
