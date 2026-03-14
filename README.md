@@ -17,9 +17,6 @@ Native Mode is the intended day-to-day setup now. Each configured instance maps 
 
 Sandboxie Mode still works if you already run BitCraft through Sandboxie Plus, but it is now the secondary path and mainly meant for preview-only usage.
 
-> **Stable version:** 0.2.3 (see Releases)  
-> **No-Sandboxie solution:** use the prerelease **V0.3.0-alpha**: https://github.com/osnium/bitcraft-preview/releases/tag/V0.3.0-alpha
-
 
 ## Features
 
