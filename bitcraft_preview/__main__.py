@@ -172,6 +172,10 @@ def main():
     app = QApplication(sys.argv)
     app.setStyleSheet(build_dark_stylesheet())
 
+    app_icon_path = get_asset_path("icon.ico")
+    if os.path.exists(app_icon_path):
+        app.setWindowIcon(QIcon(app_icon_path))
+
     if DEBUG:
         signal.signal(signal.SIGINT, signal.SIG_DFL)
 
@@ -192,6 +196,8 @@ def main():
     tools_menu = QMenu("Tools", tray_menu)
     _manager = None
     _shell = MainShellWindow()
+    if os.path.exists(app_icon_path):
+        _shell.setWindowIcon(QIcon(app_icon_path))
 
     def _show_gui_shell() -> None:
         _shell.show_from_tray()

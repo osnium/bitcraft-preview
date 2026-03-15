@@ -65,22 +65,26 @@ class NativeSetupServiceTests(unittest.TestCase):
             bitcraft_path=os.path.join(self._library, "steamapps", "common", "BitCraft", "BitCraft.exe"),
         )
 
-        with patch("bitcraft_preview.native.setup_service.get_primary_steam_path", return_value=self._steam_root), patch(
-            "bitcraft_preview.native.setup_service.find_bitcraft_install", return_value=install
-        ), patch.object(NativeSetupService, "_ensure_steamapps_link", return_value="created"), patch(
-            "bitcraft_preview.native.state_manager.protect_text", side_effect=lambda p, **_: f"ENC:{p}"
-        ), patch("bitcraft_preview.native.state_manager.unprotect_text", side_effect=lambda c: c.replace("ENC:", "", 1)):
+        with patch("bitcraft_preview.native.setup_service.is_admin", return_value=True), patch(
+            "bitcraft_preview.native.setup_service.get_primary_steam_path", return_value=self._steam_root
+        ), patch("bitcraft_preview.native.setup_service.find_bitcraft_install", return_value=install), patch.object(
+            NativeSetupService, "_ensure_steamapps_link", return_value="created"
+        ), patch("bitcraft_preview.native.state_manager.protect_text", side_effect=lambda p, **_: f"ENC:{p}"), patch(
+            "bitcraft_preview.native.state_manager.unprotect_text", side_effect=lambda c: c.replace("ENC:", "", 1)
+        ):
             first = service.reconcile(2)
 
         self.assertEqual(first.users_created, 2)
         self.assertEqual(first.users_reused, 0)
         self.assertEqual(len(manager.list_instances()), 2)
 
-        with patch("bitcraft_preview.native.setup_service.get_primary_steam_path", return_value=self._steam_root), patch(
-            "bitcraft_preview.native.setup_service.find_bitcraft_install", return_value=install
-        ), patch.object(NativeSetupService, "_ensure_steamapps_link", return_value="reused"), patch(
-            "bitcraft_preview.native.state_manager.protect_text", side_effect=lambda p, **_: f"ENC:{p}"
-        ), patch("bitcraft_preview.native.state_manager.unprotect_text", side_effect=lambda c: c.replace("ENC:", "", 1)):
+        with patch("bitcraft_preview.native.setup_service.is_admin", return_value=True), patch(
+            "bitcraft_preview.native.setup_service.get_primary_steam_path", return_value=self._steam_root
+        ), patch("bitcraft_preview.native.setup_service.find_bitcraft_install", return_value=install), patch.object(
+            NativeSetupService, "_ensure_steamapps_link", return_value="reused"
+        ), patch("bitcraft_preview.native.state_manager.protect_text", side_effect=lambda p, **_: f"ENC:{p}"), patch(
+            "bitcraft_preview.native.state_manager.unprotect_text", side_effect=lambda c: c.replace("ENC:", "", 1)
+        ):
             second = service.reconcile(2)
 
         self.assertEqual(second.users_created, 0)
@@ -104,7 +108,8 @@ class NativeSetupServiceTests(unittest.TestCase):
                 steam_exe_path=os.path.join(instance_root, "steam.exe"),
             )
 
-        summary = service.cleanup()
+        with patch("bitcraft_preview.native.setup_service.is_admin", return_value=True):
+            summary = service.cleanup()
         cfg = manager.load_config()
 
         self.assertEqual(summary.users_deleted, 1)
