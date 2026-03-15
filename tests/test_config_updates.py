@@ -125,6 +125,37 @@ class ConfigUpdateTests(unittest.TestCase):
                 # In practice, if config_updated is False, save_config won't be called
                 # So this is more of a logic check than a strict filesystem test
 
+    def test_new_gui_section_gets_added(self):
+        """When DEFAULT_CONFIG gets a new gui section, it should be merged into old configs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_config_path = os.path.join(tmpdir, "config.json")
+
+            old_config = {
+                "version": config.DEFAULT_CONFIG["version"],
+                "mode": "sandboxie",
+                "UserSettings": config.DEFAULT_CONFIG["UserSettings"].copy(),
+                "SystemSettings": config.DEFAULT_CONFIG["SystemSettings"].copy(),
+                "native_mode": {"enabled": False, "instances": []},
+                "sandboxie_mode": {"enabled": True, "instances": []},
+            }
+
+            with open(test_config_path, "w") as f:
+                json.dump(old_config, f)
+
+            with patch.object(config, "config_file_path", test_config_path):
+                loaded = config.load_config()
+
+                self.assertIn("gui", loaded)
+                self.assertIn("open_on_startup", loaded["gui"])
+                self.assertIn("sidebar_collapsed", loaded["gui"])
+                self.assertIn("last_panel", loaded["gui"])
+
+                with open(test_config_path, "r") as f:
+                    saved_config = json.load(f)
+
+                self.assertIn("gui", saved_config)
+                self.assertEqual(saved_config["gui"]["open_on_startup"], False)
+
 
 if __name__ == "__main__":
     unittest.main()

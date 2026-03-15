@@ -4,7 +4,7 @@ import os
 import signal
 import sys
 
-from bitcraft_preview.config import DEBUG, ensure_config_exists, get_config_file_path
+from bitcraft_preview.config import DEBUG, ensure_config_exists, get_config_file_path, get_gui_settings
 from bitcraft_preview.logging_setup import init_logging
 from bitcraft_preview.version import get_app_version
 from bitcraft_preview.native import (
@@ -159,6 +159,7 @@ def main():
     from PySide6.QtGui import QAction, QIcon
     from PySide6.QtWidgets import QApplication, QInputDialog, QMenu, QMessageBox, QSystemTrayIcon
 
+    from bitcraft_preview.ui.main_shell import MainShellWindow, build_dark_stylesheet
     from bitcraft_preview.ui.overlay_manager import OverlayManager
 
     logger = init_logging()
@@ -169,6 +170,7 @@ def main():
         logger.error("Failed to create config file: %s", get_config_file_path())
 
     app = QApplication(sys.argv)
+    app.setStyleSheet(build_dark_stylesheet())
 
     if DEBUG:
         signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -189,6 +191,14 @@ def main():
     native_accounts_menu = QMenu("Native Accounts", tray_menu)
     tools_menu = QMenu("Tools", tray_menu)
     _manager = None
+    _shell = MainShellWindow()
+
+    def _show_gui_shell() -> None:
+        _shell.show_from_tray()
+
+    def _show_settings_panel() -> None:
+        _shell.show_panel("settings")
+        _shell.show_from_tray()
 
     def _refresh_overlay_and_tray_labels() -> None:
         # Keep account labels and overlays in sync immediately after metadata edits.
@@ -557,6 +567,16 @@ def main():
             logger.exception("Unexpected tray native cleanup error")
             QMessageBox.critical(None, "Native Cleanup Error", str(e))
 
+    open_gui_action = QAction("Open GUI", app)
+    open_gui_action.triggered.connect(_show_gui_shell)
+    tray_menu.addAction(open_gui_action)
+
+    open_settings_action = QAction("Open Settings", app)
+    open_settings_action.triggered.connect(_show_settings_panel)
+    tray_menu.addAction(open_settings_action)
+
+    tray_menu.addSeparator()
+
     _rebuild_native_accounts_menu()
     native_accounts_menu.aboutToShow.connect(_rebuild_native_accounts_menu)
     tray_menu.addMenu(native_accounts_menu)
@@ -588,9 +608,13 @@ def main():
     tray_menu.addAction(quit_action)
 
     tray_icon.setContextMenu(tray_menu)
+    tray_icon.activated.connect(lambda reason: _show_gui_shell() if reason == QSystemTrayIcon.ActivationReason.DoubleClick else None)
     tray_icon.show()
 
     _manager = OverlayManager()
+
+    if get_gui_settings().get("open_on_startup", False):
+        _show_gui_shell()
 
     sys.exit(app.exec())
 
