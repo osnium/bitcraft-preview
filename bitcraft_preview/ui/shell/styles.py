@@ -147,6 +147,90 @@ QFrame#SectionDivider {
     background-color: #2a384f;
     min-height: 1px;
 }
+QFrame#AccountRow {
+    background-color: #162131;
+    border: 1px solid #2a384f;
+    border-radius: 9px;
+}
+QFrame#AccountRow:hover {
+    border: 1px solid #365375;
+    background-color: #18273a;
+}
+QFrame#AccountRow[selected="true"] {
+    border: 1px solid #58a8ff;
+    background-color: #1b2b40;
+}
+QLabel#AccountDisplayName {
+    color: #f3f8ff;
+    font-size: 10pt;
+    font-weight: 600;
+    background-color: transparent;
+}
+QLabel#AccountStatusDot {
+    background-color: transparent;
+}
+QLabel#AccountRowStatus {
+    color: #8fd0ff;
+    font-size: 8.5pt;
+    background-color: transparent;
+}
+QLabel#AccountRowStatus[error="true"] {
+    color: #ff9c9c;
+}
+QPushButton#AccountActionButton,
+QPushButton#AccountFooterButton {
+    background-color: #1a2534;
+    border: 1px solid #2b3a53;
+    border-radius: 7px;
+    padding: 0px;
+}
+QPushButton#AccountActionButton:hover,
+QPushButton#AccountFooterButton:hover {
+    background-color: #223048;
+    border: 1px solid #4d79a8;
+}
+QPushButton#AccountActionButton:pressed,
+QPushButton#AccountFooterButton:pressed {
+    background-color: #162132;
+}
+QPushButton#AccountActionButton:disabled,
+QPushButton#AccountFooterButton:disabled,
+QPushButton#AccountInlineButton:disabled,
+QPushButton#AccountsEmptyState:disabled {
+    background-color: #101721;
+    color: #68809f;
+    border: 1px solid #1e2b3d;
+}
+QFrame#AccountInlineEditor {
+    background-color: #101721;
+    border: 1px solid #27354a;
+    border-radius: 8px;
+}
+QPushButton#AccountInlineButton {
+    background-color: #1a2534;
+    border: 1px solid #2b3a53;
+    border-radius: 6px;
+    padding: 5px 10px;
+}
+QPushButton#AccountsEmptyState {
+    background-color: #151f2d;
+    border: 1px dashed #40607f;
+    border-radius: 10px;
+    color: #d6e7fb;
+    padding: 18px;
+    text-align: left;
+}
+QPushButton#AccountsEmptyState:hover {
+    background-color: #1b2a3f;
+    border: 1px dashed #58a8ff;
+}
+QLabel#AccountFeedback {
+    color: #9caec7;
+    background-color: transparent;
+}
+QLabel#AccountFeedback[error="true"] {
+    color: #ff8d8d;
+}
 QScrollBar:vertical {
     background: #121a27;
     width: 10px;

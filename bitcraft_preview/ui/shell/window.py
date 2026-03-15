@@ -257,6 +257,7 @@ class MainShellWindow(QMainWindow):
             target = "settings"
         index = self._panel_index_by_id[target]
         self.content_stack.setCurrentIndex(index)
+        self._refresh_visible_panel()
 
         if sync_nav:
             row = self._nav_row_by_panel_id.get(target)
@@ -285,8 +286,12 @@ class MainShellWindow(QMainWindow):
 
         self.content_stack.setCurrentIndex(panel_index)
         config.update_gui_settings(last_panel=panel_id)
+        self._refresh_visible_panel()
 
+    def _refresh_visible_panel(self) -> None:
         widget = self.content_stack.currentWidget()
+        if isinstance(widget, QScrollArea):
+            widget = widget.widget()
         if isinstance(widget, AccountsPanel):
             widget.refresh_data()
 
