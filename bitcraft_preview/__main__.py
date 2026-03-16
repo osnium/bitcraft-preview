@@ -4,8 +4,8 @@ import os
 import signal
 import sys
 
-from bitcraft_preview.config import DEBUG, ensure_config_exists, get_config_file_path, get_gui_settings
-from bitcraft_preview.logging_setup import init_logging
+from bitcraft_preview.config import DEBUG, LOG_DIR_NAME, ensure_config_exists, get_config_file_path, get_gui_settings
+from bitcraft_preview.logging_setup import get_latest_log_file_path, init_logging
 from bitcraft_preview.version import get_app_version
 from bitcraft_preview.native import (
     NativeProcessControlError,
@@ -472,8 +472,17 @@ def main():
         _open_file_path(get_config_file_path(), "Open Config Error")
 
     def _open_log_from_tray() -> None:
-        log_path = os.path.join(os.environ.get("LOCALAPPDATA", ""), "BitCraftPreview", "bitcraft_preview.log")
-        _open_file_path(log_path, "Open Log Error")
+        log_path = get_latest_log_file_path()
+        if log_path:
+            log_dir = os.path.dirname(log_path)
+        else:
+            log_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), LOG_DIR_NAME)
+
+        if not os.path.isdir(log_dir):
+            QMessageBox.information(None, "Open Log Folder", "Log folder does not exist yet.")
+            return
+
+        _open_file_path(log_dir, "Open Log Folder Error")
 
     def _require_native_admin(operation_name: str) -> bool:
         if is_admin():
