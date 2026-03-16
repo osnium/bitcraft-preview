@@ -6,6 +6,8 @@ from bitcraft_preview.win32.dwm_thumbnail import register_thumbnail, update_thum
 from bitcraft_preview.win32.activation import activate_window
 from bitcraft_preview.config import INLINE_LABEL, get_preview_opacity, get_hover_zoom_enabled, get_hover_zoom_percent, get_preview_tile_width, get_preview_tile_height
 
+LABEL_OPACITY_BOOST = 0.20
+
 class LivePreviewTile(QWidget):
     def __init__(self, target_hwnd: int, label_text: str, parent=None):
         super().__init__(parent)
@@ -19,6 +21,7 @@ class LivePreviewTile(QWidget):
         
         self.original_rect = QRect()
         self.zoomed_in = False
+        self._last_label_opacity = None
 
         # Set window flags for borderless, always-on-top, tool window (no taskbar icon)
         self.setWindowFlags(
@@ -40,23 +43,8 @@ class LivePreviewTile(QWidget):
         
         # Sandbox label
         self.label = QLabel(self.label_text)
-        
-        # Apply the configured opacity to the label's styles / effect
-        # Set text and background according to our transparency factor, 
-        # but add +0.25 so the text is always much more legible than the background!
-        self.base_label_op = min(1.0, get_preview_opacity() + 0.25)
-        
-        # Set initial style
-        self._apply_label_style(self.base_label_op)
 
-        # Drop shadow for readability
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(8)
-        # Drop shadow opacity should somewhat scale as well
-        shadow_alpha = int(255 * self.base_label_op)
-        shadow.setColor(QColor(0, 0, 0, shadow_alpha))
-        shadow.setOffset(2, 2)
-        self.label.setGraphicsEffect(shadow)
+        self._label_shadow = None
         
         # Adjust layout based on config
         if INLINE_LABEL:
@@ -70,16 +58,56 @@ class LivePreviewTile(QWidget):
                 Qt.WindowType.WindowTransparentForInput
             )
             self.label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-            self.label.setWindowOpacity(self.base_label_op)
         else:
+            # Drop shadow improves readability for embedded labels, but can create
+            # noisy layered-window warnings on the inline floating label window.
+            shadow = QGraphicsDropShadowEffect()
+            shadow.setBlurRadius(8)
+            shadow.setColor(QColor(0, 0, 0, 255))
+            shadow.setOffset(2, 2)
+            self._label_shadow = shadow
+            self.label.setGraphicsEffect(shadow)
+
             # Spacer so label stays at the bottom
             self.layout.addStretch()
             self.layout.addWidget(self.label, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
 
+        self._refresh_label_visuals()
+
+    def _clamp_opacity(self, value: float) -> float:
+        return max(0.0, min(1.0, float(value)))
+
+    def _compute_label_opacity(self) -> float:
+        preview_opacity = self._clamp_opacity(get_preview_opacity())
+        if preview_opacity <= 0.0:
+            return 0.0
+        if preview_opacity >= 1.0:
+            return 1.0
+        return self._clamp_opacity(preview_opacity + LABEL_OPACITY_BOOST)
+
+    def _refresh_label_visuals(self):
+        label_opacity = self._compute_label_opacity()
+        if self._last_label_opacity is not None and abs(label_opacity - self._last_label_opacity) < 0.001:
+            return
+
+        shadow_alpha = int(255 * label_opacity)
+        if self._label_shadow is not None:
+            self._label_shadow.setColor(QColor(0, 0, 0, shadow_alpha))
+
+        if INLINE_LABEL:
+            if self.label.isVisible():
+                self.label.setWindowOpacity(label_opacity)
+        else:
+            self._apply_label_style(label_opacity)
+
+        self._last_label_opacity = label_opacity
+
     def _apply_label_style(self, opacity: float):
+        opacity = self._clamp_opacity(opacity)
         bg_alpha = int(180 * opacity)
+        fg_alpha = int(255 * opacity)
         self.label.setStyleSheet(
-            f"color: white; background-color: rgba(0,0,0,{bg_alpha}); padding: 5px; font-weight: bold; border-radius: 5px;"
+            f"color: rgba(255,255,255,{fg_alpha}); background-color: rgba(0,0,0,{bg_alpha}); padding: 5px; font-weight: bold; border-radius: 5px;"
         )
 
     def paintEvent(self, event):
@@ -206,10 +234,7 @@ class LivePreviewTile(QWidget):
             self.zoomed_in = True
 
         self.update_thumbnail_rect()
-        if INLINE_LABEL and self.label.isVisible():
-            self.label.setWindowOpacity(1.0)
-        else:
-            self._apply_label_style(1.0)
+        self._refresh_label_visuals()
 
     def _unzoom(self):
         # Helper to neatly shrink the window down
@@ -232,10 +257,7 @@ class LivePreviewTile(QWidget):
             self._unzoom()
 
         self.update_thumbnail_rect()
-        if INLINE_LABEL and hasattr(self, 'label') and self.label.isVisible():
-            self.label.setWindowOpacity(self.base_label_op)
-        else:
-            self._apply_label_style(self.base_label_op)
+        self._refresh_label_visuals()
 
     def update_inline_label_position(self):
         if INLINE_LABEL and self.label.isVisible():
@@ -246,6 +268,8 @@ class LivePreviewTile(QWidget):
 
     def sync_size(self):
         """Called each refresh tick to apply live config size changes."""
+        self._refresh_label_visuals()
+        self.update_thumbnail_rect()
         if self.zoomed_in or self.dragging:
             return
         cfg_w = get_preview_tile_width()

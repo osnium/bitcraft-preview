@@ -618,6 +618,8 @@ def main():
     tray_icon.show()
 
     _manager = OverlayManager()
+    if hasattr(_shell, "settings_panel"):
+        _shell.settings_panel.live_setting_changed.connect(lambda _key: _manager.schedule_live_settings_refresh())
 
     if get_gui_settings().get("open_on_startup", False):
         _show_gui_shell()

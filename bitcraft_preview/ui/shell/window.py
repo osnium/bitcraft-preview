@@ -160,7 +160,8 @@ class MainShellWindow(QMainWindow):
         self._sidebar_width_animation.finished.connect(self._on_sidebar_animation_finished)
 
     def _register_panels(self) -> None:
-        self._add_panel("settings", "Settings", SettingsPanel(self), add_to_nav=False)
+        self.settings_panel = SettingsPanel(self)
+        self._add_panel("settings", "Settings", self.settings_panel, add_to_nav=False)
         self._add_panel(
             "setup",
             "Setup",

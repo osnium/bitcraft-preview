@@ -18,6 +18,7 @@ HOTKEY_POLL_INTERVAL_MS = 25
 class OverlayManager:
     def __init__(self):
         self.overlays = {}  # target_hwnd -> LivePreviewTile overlay
+        self._live_refresh_queued = False
         self.hotkey_monitor = GlobalHotkeyMonitor()
         self._current_hotkey_spec = ""
         self._last_switched_hwnd = None
@@ -113,6 +114,29 @@ class OverlayManager:
 
         if self.hotkey_monitor.poll_triggered():
             self._switch_to_next_window(enumerate_windows())
+
+    def schedule_live_settings_refresh(self):
+        if self._live_refresh_queued:
+            return
+        self._live_refresh_queued = True
+        QTimer.singleShot(0, self._apply_live_settings)
+
+    def _apply_live_settings(self):
+        self._live_refresh_queued = False
+        self._refresh_hotkey_binding()
+
+        active_hwnd = self.get_active_window()
+        hide_active = get_hide_active_window_overlay()
+
+        for hwnd, overlay in list(self.overlays.items()):
+            overlay.sync_size()
+
+            if hide_active and hwnd == active_hwnd:
+                if overlay.isVisible():
+                    overlay.hide()
+            elif not overlay.isVisible():
+                overlay.show()
+                overlay.update_thumbnail_rect()
 
     def refresh_windows(self):
         self._refresh_hotkey_binding()

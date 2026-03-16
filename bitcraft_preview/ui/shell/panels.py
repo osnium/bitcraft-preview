@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import time
 import psutil
-from PySide6.QtCore import QEvent, QSize, QTimer, Qt
+from PySide6.QtCore import QEvent, QSize, QTimer, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -33,6 +33,8 @@ from bitcraft_preview.ui.shell.widgets import CollapsibleSection, DirectInputSli
 
 
 class SettingsPanel(QWidget):
+    live_setting_changed = Signal(str)
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._building = False
@@ -189,11 +191,13 @@ class SettingsPanel(QWidget):
         normalized = max(0.0, min(1.0, value / 100.0))
         self.preview_opacity_value.setText(f"{value}%")
         config.update_user_setting("preview_opacity", normalized)
+        self.live_setting_changed.emit("preview_opacity")
 
     def _set_user_bool(self, key: str, checked: bool) -> None:
         if self._building:
             return
         config.update_user_setting(key, bool(checked))
+        self.live_setting_changed.emit(key)
 
     def _on_zoom_changed(self, value: int) -> None:
         if self._building:
@@ -201,6 +205,7 @@ class SettingsPanel(QWidget):
         zoom = max(100, min(500, int(value)))
         self.hover_zoom_value.setText(f"{zoom}%")
         config.update_user_setting("hover_zoom_percent", zoom)
+        self.live_setting_changed.emit("hover_zoom_percent")
 
     def _on_tile_size_changed(self) -> None:
         if self._building:
@@ -212,11 +217,13 @@ class SettingsPanel(QWidget):
         self.tile_preview.set_tile_size(width, height)
         config.update_user_setting("preview_tile_width", width)
         config.update_user_setting("preview_tile_height", height)
+        self.live_setting_changed.emit("preview_tile_size")
 
     def _on_hotkey_changed(self, value: str) -> None:
         if self._building:
             return
         config.update_user_setting("switch_window_hotkey", (value or "MOUSE5").strip() or "MOUSE5")
+        self.live_setting_changed.emit("switch_window_hotkey")
 
 
 class AccountsPanel(QWidget):
