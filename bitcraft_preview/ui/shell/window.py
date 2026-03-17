@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import QEasingCurve, QParallelAnimationGroup, QPropertyAnimation, QSize, Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import QEasingCurve, QParallelAnimationGroup, QPropertyAnimation, QSize, Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from bitcraft_preview.update_checker import GITHUB_RELEASES_PAGE
+
 from bitcraft_preview import config
 from bitcraft_preview.ui.shell.panels import AccountsPanel, PlaceholderPanel, SettingsPanel
 
@@ -27,6 +29,7 @@ from bitcraft_preview.ui.shell.panels import AccountsPanel, PlaceholderPanel, Se
 class MainShellWindow(QMainWindow):
     SIDEBAR_EXPANDED_WIDTH = 188
     SIDEBAR_COLLAPSED_WIDTH = 46
+    hidden_to_tray = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -63,6 +66,36 @@ class MainShellWindow(QMainWindow):
         content_layout.setContentsMargins(12, 12, 12, 12)
         content_layout.setSpacing(10)
         self.content_stack = QStackedWidget(self.content_surface)
+
+        # Update notification banner — hidden until an update is detected
+        self.update_banner = QFrame(self.content_surface)
+        self.update_banner.setObjectName("UpdateBanner")
+        banner_layout = QHBoxLayout(self.update_banner)
+        banner_layout.setContentsMargins(10, 6, 10, 6)
+        banner_layout.setSpacing(10)
+
+        self._update_banner_label = QLabel()
+        self._update_banner_label.setObjectName("UpdateBannerLabel")
+
+        self._update_banner_view_btn = QPushButton("View Release")
+        self._update_banner_view_btn.setObjectName("UpdateBannerViewBtn")
+        self._update_banner_view_btn.setFixedHeight(26)
+        self._update_banner_view_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(GITHUB_RELEASES_PAGE))
+        )
+
+        self._update_banner_dismiss_btn = QPushButton("✕")
+        self._update_banner_dismiss_btn.setObjectName("UpdateBannerDismissBtn")
+        self._update_banner_dismiss_btn.setFixedSize(26, 26)
+        self._update_banner_dismiss_btn.setToolTip("Dismiss for this session")
+        self._update_banner_dismiss_btn.clicked.connect(self.update_banner.hide)
+
+        banner_layout.addWidget(self._update_banner_label, 1)
+        banner_layout.addWidget(self._update_banner_view_btn)
+        banner_layout.addWidget(self._update_banner_dismiss_btn)
+
+        self.update_banner.hide()
+        content_layout.addWidget(self.update_banner)
         content_layout.addWidget(self.content_stack)
 
         self.sidebar_surface = QFrame(self.main_surface)
@@ -175,11 +208,6 @@ class MainShellWindow(QMainWindow):
             PlaceholderPanel("Monitor", "Reserved for account activity and API data in a later iteration.", self),
         )
         self._add_panel(
-            "updates",
-            "Updates",
-            PlaceholderPanel("Updates", "Reserved for in-app update notifications.", self),
-        )
-        self._add_panel(
             "map",
             "Map",
             PlaceholderPanel("Map", "Reserved for location/map visualization of active accounts.", self),
@@ -217,7 +245,6 @@ class MainShellWindow(QMainWindow):
         icon_paths = {
             "accounts": self._asset_path("icons", "tabs", "accounts.png"),
             "monitor": self._asset_path("icons", "tabs", "monitor.png"),
-            "updates": self._asset_path("icons", "tabs", "updates.png"),
             "map": self._asset_path("icons", "tabs", "map.png"),
         }
         path = icon_paths.get(panel_id)
@@ -345,6 +372,12 @@ class MainShellWindow(QMainWindow):
     def closeEvent(self, event) -> None:  # type: ignore[override]
         event.ignore()
         self.hide()
+        self.hidden_to_tray.emit()
+
+    def show_update_banner(self, current: str, latest: str) -> None:
+        """Display the update notification banner."""
+        self._update_banner_label.setText(f"Update available:  {current}  →  {latest}")
+        self.update_banner.show()
 
     def show_from_tray(self) -> None:
         self.show()

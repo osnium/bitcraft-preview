@@ -275,4 +275,37 @@ QScrollBar::add-page:horizontal,
 QScrollBar::sub-page:horizontal {
     background: transparent;
 }
+QFrame#UpdateBanner {
+    background-color: #1c1a0d;
+    border: 1px solid #4a4218;
+    border-radius: 8px;
+    padding: 2px 0px;
+}
+QLabel#UpdateBannerLabel {
+    color: #f0d060;
+    font-weight: 600;
+    background-color: transparent;
+}
+QPushButton#UpdateBannerViewBtn {
+    background-color: transparent;
+    border: 1px solid #5a6a88;
+    border-radius: 5px;
+    color: #80c0ff;
+    padding: 3px 10px;
+    font-size: 9pt;
+}
+QPushButton#UpdateBannerViewBtn:hover {
+    background-color: #1b2a40;
+    border-color: #80c0ff;
+}
+QPushButton#UpdateBannerDismissBtn {
+    background-color: transparent;
+    border: none;
+    color: #8a9ab5;
+    font-size: 13pt;
+    padding: 0px;
+}
+QPushButton#UpdateBannerDismissBtn:hover {
+    color: #c0cfe8;
+}
 """

@@ -54,7 +54,7 @@ DEFAULT_CONFIG = {
         "instances": [],
     },
     "gui": {
-        "open_on_startup": False,
+        "open_on_startup": True,
         "sidebar_collapsed": False,
         "last_panel": "settings",
     },

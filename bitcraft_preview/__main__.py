@@ -156,11 +156,13 @@ def main():
         print("BitCraftPreview is already running. Exiting.")
         return
 
-    from PySide6.QtGui import QAction, QIcon
+    from PySide6.QtCore import QTimer, QUrl
+    from PySide6.QtGui import QAction, QDesktopServices, QIcon
     from PySide6.QtWidgets import QApplication, QInputDialog, QMenu, QMessageBox, QSystemTrayIcon
 
     from bitcraft_preview.ui.main_shell import MainShellWindow, build_dark_stylesheet
     from bitcraft_preview.ui.overlay_manager import OverlayManager
+    from bitcraft_preview.update_checker import GITHUB_RELEASES_PAGE, UpdateChecker
 
     logger = init_logging()
     logger.info("Starting BitCraft Preview application v%s", get_app_version())
@@ -198,6 +200,18 @@ def main():
     _shell = MainShellWindow()
     if os.path.exists(app_icon_path):
         _shell.setWindowIcon(QIcon(app_icon_path))
+
+    def _show_tray_balloon(title: str, message: str) -> None:
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        tray_icon.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 4000)
+
+    _shell.hidden_to_tray.connect(
+        lambda: _show_tray_balloon(
+            "BitCraft Preview",
+            "BitCraft Preview is still running in the system tray.",
+        )
+    )
 
     def _show_gui_shell() -> None:
         _shell.show_from_tray()
@@ -578,6 +592,11 @@ def main():
             logger.exception("Unexpected tray native cleanup error")
             QMessageBox.critical(None, "Native Cleanup Error", str(e))
 
+    _update_tray_action = QAction("", tray_menu)
+    _update_tray_action.setVisible(False)
+    _update_tray_action.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(GITHUB_RELEASES_PAGE)))
+    tray_menu.addAction(_update_tray_action)
+
     open_gui_action = QAction("Open GUI", app)
     open_gui_action.triggered.connect(_show_gui_shell)
     tray_menu.addAction(open_gui_action)
@@ -625,6 +644,30 @@ def main():
     _manager = OverlayManager()
     if hasattr(_shell, "settings_panel"):
         _shell.settings_panel.live_setting_changed.connect(lambda _key: _manager.schedule_live_settings_refresh())
+
+    _update_checker: UpdateChecker | None = None
+
+    def _on_update_available(current: str, latest: str) -> None:
+        _shell.show_update_banner(current, latest)
+        _update_tray_action.setText("Update available")
+        _update_tray_action.setToolTip(f"Update available: {current} -> {latest}")
+        _update_tray_action.setVisible(True)
+
+    def _start_update_check() -> None:
+        nonlocal _update_checker
+        if _update_checker is not None and _update_checker.isRunning():
+            return
+
+        _update_checker = UpdateChecker()
+        _update_checker.update_available.connect(_on_update_available)
+        _update_checker.finished.connect(_update_checker.deleteLater)
+        _update_checker.start()
+
+    _update_check_timer = QTimer(app)
+    _update_check_timer.setInterval(30 * 60 * 1000)
+    _update_check_timer.timeout.connect(_start_update_check)
+    _update_check_timer.start()
+    QTimer.singleShot(2000, _start_update_check)
 
     if get_gui_settings().get("open_on_startup", False):
         _show_gui_shell()
