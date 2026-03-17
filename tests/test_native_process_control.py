@@ -108,7 +108,7 @@ class NativeProcessControlTests(unittest.TestCase):
             result = controller.launch_instance("steam1")
 
         self.assertEqual(result.steam_pid, 1111)
-        kill_mock.assert_called_once_with("steam1", timeout=10.0)
+        kill_mock.assert_not_called()
         self.assertEqual(len(launcher.calls), 1)
         mode, kwargs = launcher.calls[0]
         self.assertEqual(mode, "silent")

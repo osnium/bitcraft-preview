@@ -52,7 +52,12 @@ DEFAULT_CONFIG = {
     "sandboxie_mode": {
         "enabled": True,
         "instances": [],
-    }
+    },
+    "gui": {
+        "open_on_startup": True,
+        "sidebar_collapsed": False,
+        "last_panel": "settings",
+    },
 }
 
 def _resolve_config_file_path() -> str:
@@ -103,12 +108,16 @@ def load_config():
                 if "sandboxie_mode" not in merged_config or not isinstance(merged_config["sandboxie_mode"], dict):
                     merged_config["sandboxie_mode"] = {}
                     config_updated = True
+                if "gui" not in merged_config or not isinstance(merged_config["gui"], dict):
+                    merged_config["gui"] = {}
+                    config_updated = True
 
                 # Merge known sections while retaining unknown fields from disk.
                 default_user = DEFAULT_CONFIG["UserSettings"]
                 default_system = DEFAULT_CONFIG["SystemSettings"]
                 default_native = DEFAULT_CONFIG["native_mode"]
                 default_sandboxie = DEFAULT_CONFIG["sandboxie_mode"]
+                default_gui = DEFAULT_CONFIG["gui"]
 
                 merged_user = copy.deepcopy(default_user)
                 user_settings_before = len(merged_config["UserSettings"])
@@ -145,6 +154,13 @@ def load_config():
                 if len(merged_sandboxie) > sandboxie_keys_before:
                     config_updated = True
                 merged_config["sandboxie_mode"] = merged_sandboxie
+
+                merged_gui = copy.deepcopy(default_gui)
+                gui_keys_before = len(merged_config["gui"])
+                merged_gui.update(merged_config["gui"])
+                if len(merged_gui) > gui_keys_before:
+                    config_updated = True
+                merged_config["gui"] = merged_gui
 
                 if merged_config.get("version") != APP_VERSION:
                     merged_config["version"] = APP_VERSION
@@ -217,3 +233,42 @@ def get_preview_tile_height(): return max(60, int(load_config()["UserSettings"][
 def get_current_mode() -> str:
     mode = str(load_config().get("mode", "sandboxie")).strip().lower()
     return mode if mode in {"native", "sandboxie"} else "sandboxie"
+
+
+def get_gui_settings() -> dict:
+    gui = load_config().get("gui", {})
+    defaults = DEFAULT_CONFIG["gui"]
+    return {
+        "open_on_startup": bool(gui.get("open_on_startup", defaults["open_on_startup"])),
+        "sidebar_collapsed": bool(gui.get("sidebar_collapsed", defaults["sidebar_collapsed"])),
+        "last_panel": str(gui.get("last_panel", defaults["last_panel"]) or defaults["last_panel"]).strip().lower(),
+    }
+
+
+def update_gui_settings(**kwargs) -> dict:
+    allowed_keys = {"open_on_startup", "sidebar_collapsed", "last_panel"}
+    cfg = load_config()
+    gui = cfg.setdefault("gui", copy.deepcopy(DEFAULT_CONFIG["gui"]))
+
+    for key, value in kwargs.items():
+        if key not in allowed_keys:
+            continue
+        if key in {"open_on_startup", "sidebar_collapsed"}:
+            gui[key] = bool(value)
+        elif key == "last_panel":
+            panel = str(value).strip().lower() if value is not None else ""
+            gui[key] = panel or DEFAULT_CONFIG["gui"]["last_panel"]
+
+    cfg["gui"] = gui
+    save_config(cfg)
+    return get_gui_settings()
+
+
+def update_user_setting(key: str, value):
+    cfg = load_config()
+    user_settings = cfg.setdefault("UserSettings", copy.deepcopy(DEFAULT_CONFIG["UserSettings"]))
+    if key not in user_settings:
+        raise KeyError(f"Unknown user setting: {key}")
+    user_settings[key] = value
+    cfg["UserSettings"] = user_settings
+    save_config(cfg)

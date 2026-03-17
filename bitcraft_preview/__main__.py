@@ -4,8 +4,9 @@ import os
 import signal
 import sys
 
-from bitcraft_preview.config import DEBUG, ensure_config_exists, get_config_file_path
-from bitcraft_preview.logging_setup import init_logging
+from bitcraft_preview.config import DEBUG, ensure_config_exists, get_config_file_path, get_gui_settings
+from bitcraft_preview.assets import get_asset_path
+from bitcraft_preview.logging_setup import get_log_directory_path, init_logging
 from bitcraft_preview.version import get_app_version
 from bitcraft_preview.native import (
     NativeProcessControlError,
@@ -16,16 +17,7 @@ from bitcraft_preview.native import (
     is_admin,
     setup_disclaimer_text,
 )
-
-
-def get_asset_path(asset_name):
-    """Get the path to an asset file, handling both dev and packaged modes."""
-    if getattr(sys, "frozen", False):
-        base_path = sys._MEIPASS
-        return os.path.join(base_path, "assets", asset_name)
-
-    base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base_path, "bitcraft_preview", "assets", asset_name)
+from bitcraft_preview.win32.gamepad_detector import GamepadDetector
 
 
 def _run_native_cli(args) -> None:
@@ -156,10 +148,13 @@ def main():
         print("BitCraftPreview is already running. Exiting.")
         return
 
-    from PySide6.QtGui import QAction, QIcon
+    from PySide6.QtCore import QTimer, QUrl
+    from PySide6.QtGui import QAction, QDesktopServices, QIcon
     from PySide6.QtWidgets import QApplication, QInputDialog, QMenu, QMessageBox, QSystemTrayIcon
 
+    from bitcraft_preview.ui.main_shell import MainShellWindow, build_dark_stylesheet
     from bitcraft_preview.ui.overlay_manager import OverlayManager
+    from bitcraft_preview.update_checker import GITHUB_RELEASES_PAGE, UpdateChecker
 
     logger = init_logging()
     logger.info("Starting BitCraft Preview application v%s", get_app_version())
@@ -169,6 +164,26 @@ def main():
         logger.error("Failed to create config file: %s", get_config_file_path())
 
     app = QApplication(sys.argv)
+    app.setStyleSheet(build_dark_stylesheet())
+
+    try:
+        if GamepadDetector().is_connected():
+            QMessageBox.warning(
+                None,
+                "Controller Detected",
+                (
+                    "A controller is currently connected.\n\n"
+                    "Known issue: BitCraft will crash when another instance is already running "
+                    "and a controller is connected."
+
+                ),
+            )
+    except Exception as e:
+        logger.debug("Skipping startup controller warning check: %s", e)
+
+    app_icon_path = get_asset_path("icon.ico")
+    if os.path.exists(app_icon_path):
+        app.setWindowIcon(QIcon(app_icon_path))
 
     if DEBUG:
         signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -189,6 +204,29 @@ def main():
     native_accounts_menu = QMenu("Native Accounts", tray_menu)
     tools_menu = QMenu("Tools", tray_menu)
     _manager = None
+    _shell = MainShellWindow()
+    if os.path.exists(app_icon_path):
+        _shell.setWindowIcon(QIcon(app_icon_path))
+    app.aboutToQuit.connect(_shell.mark_app_quitting)
+
+    def _show_tray_balloon(title: str, message: str) -> None:
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        tray_icon.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 4000)
+
+    _shell.hidden_to_tray.connect(
+        lambda: _show_tray_balloon(
+            "BitCraft Preview",
+            "BitCraft Preview is still running in the system tray.",
+        )
+    )
+
+    def _show_gui_shell() -> None:
+        _shell.show_from_tray()
+
+    def _show_settings_panel() -> None:
+        _shell.show_panel("settings")
+        _shell.show_from_tray()
 
     def _refresh_overlay_and_tray_labels() -> None:
         # Keep account labels and overlays in sync immediately after metadata edits.
@@ -456,8 +494,13 @@ def main():
         _open_file_path(get_config_file_path(), "Open Config Error")
 
     def _open_log_from_tray() -> None:
-        log_path = os.path.join(os.environ.get("LOCALAPPDATA", ""), "BitCraftPreview", "bitcraft_preview.log")
-        _open_file_path(log_path, "Open Log Error")
+        log_dir = get_log_directory_path()
+
+        if not os.path.isdir(log_dir):
+            QMessageBox.information(None, "Open Log Folder", "Log folder does not exist yet.")
+            return
+
+        _open_file_path(log_dir, "Open Log Folder Error")
 
     def _require_native_admin(operation_name: str) -> bool:
         if is_admin():
@@ -557,6 +600,21 @@ def main():
             logger.exception("Unexpected tray native cleanup error")
             QMessageBox.critical(None, "Native Cleanup Error", str(e))
 
+    _update_tray_action = QAction("", tray_menu)
+    _update_tray_action.setVisible(False)
+    _update_tray_action.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(GITHUB_RELEASES_PAGE)))
+    tray_menu.addAction(_update_tray_action)
+
+    open_gui_action = QAction("Open GUI", app)
+    open_gui_action.triggered.connect(_show_gui_shell)
+    tray_menu.addAction(open_gui_action)
+
+    open_settings_action = QAction("Open Settings", app)
+    open_settings_action.triggered.connect(_show_settings_panel)
+    tray_menu.addAction(open_settings_action)
+
+    tray_menu.addSeparator()
+
     _rebuild_native_accounts_menu()
     native_accounts_menu.aboutToShow.connect(_rebuild_native_accounts_menu)
     tray_menu.addMenu(native_accounts_menu)
@@ -584,13 +642,56 @@ def main():
     tray_menu.addSeparator()
 
     quit_action = QAction("Quit", app)
+    quit_action.triggered.connect(_shell.mark_app_quitting)
     quit_action.triggered.connect(app.quit)
     tray_menu.addAction(quit_action)
 
     tray_icon.setContextMenu(tray_menu)
+    tray_icon.activated.connect(lambda reason: _show_gui_shell() if reason == QSystemTrayIcon.ActivationReason.DoubleClick else None)
     tray_icon.show()
 
     _manager = OverlayManager()
+    if hasattr(_shell, "settings_panel"):
+        _shell.settings_panel.live_setting_changed.connect(lambda _key: _manager.schedule_live_settings_refresh())
+
+    _update_checker: UpdateChecker | None = None
+
+    def _on_update_available(current: str, latest: str) -> None:
+        _shell.show_update_banner(current, latest)
+        _update_tray_action.setText("Update available")
+        _update_tray_action.setToolTip(f"Update available: {current} -> {latest}")
+        _update_tray_action.setVisible(True)
+
+    def _start_update_check() -> None:
+        nonlocal _update_checker
+        if _update_checker is not None:
+            try:
+                if _update_checker.isRunning():
+                    return
+            except RuntimeError:
+                _update_checker = None
+
+        _update_checker = UpdateChecker()
+        _update_checker.update_available.connect(_on_update_available)
+        checker_ref = _update_checker
+
+        def _on_checker_finished() -> None:
+            nonlocal _update_checker
+            if _update_checker is checker_ref:
+                _update_checker = None
+            checker_ref.deleteLater()
+
+        _update_checker.finished.connect(_on_checker_finished)
+        _update_checker.start()
+
+    _update_check_timer = QTimer(app)
+    _update_check_timer.setInterval(30 * 60 * 1000)
+    _update_check_timer.timeout.connect(_start_update_check)
+    _update_check_timer.start()
+    QTimer.singleShot(2000, _start_update_check)
+
+    if get_gui_settings().get("open_on_startup", False):
+        _show_gui_shell()
 
     sys.exit(app.exec())
 
