@@ -21,12 +21,13 @@ Sandboxie Mode still works if you already run BitCraft through Sandboxie Plus, b
 ## Features
 
 - Multiboxing without Sandboxie through the app's native account and launch management.
+- **New: Graphical user interface** manage your accounts and settings directly inside the App
+- **New: Update notifier** receive an in app notification once an update releases
 - Live DWM preview overlays for BitCraft clients.
 - Click-to-focus switching.
 - Optional hotkey-based switching between BitCraft clients.
 - Optional hiding of the active client's overlay.
 - Native per-instance labels via `overlay_nickname`.
-- Logging to `%LOCALAPPDATA%\BitCraftPreview\bitcraft_preview.log`.
 
 ## Modes
 
@@ -88,7 +89,7 @@ If you are still running clients under Sandboxie Plus, just launch BitCraft Prev
 
 ## Tray Menu
 
-The tray icon is the main control surface.
+The tray icon is the main control surface. (Till GUI is fully done)
 
 - `Native Accounts`: per-instance launch or restart, account chooser, kill, entity ID, and overlay label management.
 - `Launch All (Not Running)`: launches all configured native instances that are not already running.
