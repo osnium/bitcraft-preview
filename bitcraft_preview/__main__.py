@@ -5,6 +5,7 @@ import signal
 import sys
 
 from bitcraft_preview.config import DEBUG, ensure_config_exists, get_config_file_path, get_gui_settings
+from bitcraft_preview.assets import get_asset_path
 from bitcraft_preview.logging_setup import get_log_directory_path, init_logging
 from bitcraft_preview.version import get_app_version
 from bitcraft_preview.native import (
@@ -16,16 +17,7 @@ from bitcraft_preview.native import (
     is_admin,
     setup_disclaimer_text,
 )
-
-
-def get_asset_path(asset_name):
-    """Get the path to an asset file, handling both dev and packaged modes."""
-    if getattr(sys, "frozen", False):
-        base_path = sys._MEIPASS
-        return os.path.join(base_path, "assets", asset_name)
-
-    base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base_path, "bitcraft_preview", "assets", asset_name)
+from bitcraft_preview.win32.gamepad_detector import GamepadDetector
 
 
 def _run_native_cli(args) -> None:
@@ -174,6 +166,21 @@ def main():
     app = QApplication(sys.argv)
     app.setStyleSheet(build_dark_stylesheet())
 
+    try:
+        if GamepadDetector().is_connected():
+            QMessageBox.warning(
+                None,
+                "Controller Detected",
+                (
+                    "A controller is currently connected.\n\n"
+                    "Known issue: BitCraft will crash when another instance is already running "
+                    "and a controller is connected."
+
+                ),
+            )
+    except Exception as e:
+        logger.debug("Skipping startup controller warning check: %s", e)
+
     app_icon_path = get_asset_path("icon.ico")
     if os.path.exists(app_icon_path):
         app.setWindowIcon(QIcon(app_icon_path))
@@ -200,6 +207,7 @@ def main():
     _shell = MainShellWindow()
     if os.path.exists(app_icon_path):
         _shell.setWindowIcon(QIcon(app_icon_path))
+    app.aboutToQuit.connect(_shell.mark_app_quitting)
 
     def _show_tray_balloon(title: str, message: str) -> None:
         if not QSystemTrayIcon.isSystemTrayAvailable():
@@ -634,6 +642,7 @@ def main():
     tray_menu.addSeparator()
 
     quit_action = QAction("Quit", app)
+    quit_action.triggered.connect(_shell.mark_app_quitting)
     quit_action.triggered.connect(app.quit)
     tray_menu.addAction(quit_action)
 
@@ -655,12 +664,24 @@ def main():
 
     def _start_update_check() -> None:
         nonlocal _update_checker
-        if _update_checker is not None and _update_checker.isRunning():
-            return
+        if _update_checker is not None:
+            try:
+                if _update_checker.isRunning():
+                    return
+            except RuntimeError:
+                _update_checker = None
 
         _update_checker = UpdateChecker()
         _update_checker.update_available.connect(_on_update_available)
-        _update_checker.finished.connect(_update_checker.deleteLater)
+        checker_ref = _update_checker
+
+        def _on_checker_finished() -> None:
+            nonlocal _update_checker
+            if _update_checker is checker_ref:
+                _update_checker = None
+            checker_ref.deleteLater()
+
+        _update_checker.finished.connect(_on_checker_finished)
         _update_checker.start()
 
     _update_check_timer = QTimer(app)

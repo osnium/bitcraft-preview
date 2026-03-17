@@ -213,16 +213,15 @@ QPushButton#AccountInlineButton {
     padding: 5px 10px;
 }
 QPushButton#AccountsEmptyState {
-    background-color: #151f2d;
-    border: 1px dashed #40607f;
-    border-radius: 10px;
+    background-color: #1a2534;
+    border: 1px solid #2b3a53;
+    border-radius: 6px;
     color: #d6e7fb;
-    padding: 18px;
-    text-align: left;
+    padding: 10px;
 }
 QPushButton#AccountsEmptyState:hover {
-    background-color: #1b2a3f;
-    border: 1px dashed #58a8ff;
+    background-color: #1f2f41;
+    border: 1px solid #3a4d64;
 }
 QLabel#AccountFeedback {
     color: #9caec7;

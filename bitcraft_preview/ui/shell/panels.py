@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from bitcraft_preview import config
+from bitcraft_preview.assets import get_asset_path
 from bitcraft_preview.native.process_control import NativeProcessController
 from bitcraft_preview.native.state_manager import NativeModeStateManager
 from bitcraft_preview.ui.shell.accounts import (
@@ -254,8 +255,7 @@ class AccountsPanel(QWidget):
         self.refresh_data()
 
     def _asset_path(self, *parts: str) -> str:
-        base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        return os.path.join(base_path, "assets", *parts)
+        return get_asset_path(*parts)
 
     def _load_account_action_icon(self, filename: str, fallback_builder) -> QIcon:
         path = self._asset_path("icons", "ui", filename)

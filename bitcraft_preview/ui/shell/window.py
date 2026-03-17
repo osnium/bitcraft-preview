@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from bitcraft_preview.update_checker import GITHUB_RELEASES_PAGE
 
+from bitcraft_preview.assets import get_asset_path
 from bitcraft_preview import config
 from bitcraft_preview.ui.shell.panels import AccountsPanel, PlaceholderPanel, SettingsPanel
 
@@ -37,6 +38,7 @@ class MainShellWindow(QMainWindow):
         self._panel_index_by_id: dict[str, int] = {}
         self._nav_row_by_panel_id: dict[str, int] = {}
         self._sidebar_collapsed = False
+        self._app_quitting = False
         self._sidebar_width_animation = QParallelAnimationGroup(self)
         self._build_ui()
         self._register_panels()
@@ -158,7 +160,7 @@ class MainShellWindow(QMainWindow):
         self.quick_exit_btn = QPushButton()
         self.quick_exit_btn.setObjectName("QuickActionButton")
         self.quick_exit_btn.setToolTip("Exit BitCraft Preview completely")
-        self.quick_exit_btn.clicked.connect(QApplication.instance().quit)
+        self.quick_exit_btn.clicked.connect(self._request_app_quit)
 
         for btn in (self.quick_settings_btn, self.quick_setup_btn, self.quick_exit_btn):
             btn.setFixedSize(32, 32)
@@ -198,19 +200,19 @@ class MainShellWindow(QMainWindow):
         self._add_panel(
             "setup",
             "Setup",
-            PlaceholderPanel("Setup", "Setup workflow placeholder. This panel will host multi-step account setup in a later iteration.", self),
+            PlaceholderPanel("Setup", "Do Setup via systray for now", self),
             add_to_nav=False,
         )
         self._add_panel("accounts", "Accounts", AccountsPanel(self))
         self._add_panel(
             "monitor",
             "Monitor",
-            PlaceholderPanel("Monitor", "Reserved for account activity and API data in a later iteration.", self),
+            PlaceholderPanel("Monitor", "WIP", self),
         )
         self._add_panel(
             "map",
             "Map",
-            PlaceholderPanel("Map", "Reserved for location/map visualization of active accounts.", self),
+            PlaceholderPanel("Map", "WIP", self),
         )
 
     def _add_panel(self, panel_id: str, title: str, widget: QWidget, add_to_nav: bool = True, scrollable: bool = True) -> None:
@@ -238,8 +240,7 @@ class MainShellWindow(QMainWindow):
             self._nav_row_by_panel_id[panel_id] = self.nav.count() - 1
 
     def _asset_path(self, *parts: str) -> str:
-        base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        return os.path.join(base_path, "assets", *parts)
+        return get_asset_path(*parts)
 
     def _nav_icon_for_panel(self, panel_id: str) -> QIcon:
         icon_paths = {
@@ -370,9 +371,22 @@ class MainShellWindow(QMainWindow):
             self.quick_actions_widget.hide()
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
+        if self._app_quitting:
+            event.accept()
+            return
+
         event.ignore()
         self.hide()
         self.hidden_to_tray.emit()
+
+    def mark_app_quitting(self) -> None:
+        self._app_quitting = True
+
+    def _request_app_quit(self) -> None:
+        self.mark_app_quitting()
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
 
     def show_update_banner(self, current: str, latest: str) -> None:
         """Display the update notification banner."""
