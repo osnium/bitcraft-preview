@@ -130,6 +130,46 @@ class NativeStateManagerTests(unittest.TestCase):
         self.assertEqual(updated.entity_id, "entity-abc")
         self.assertEqual(updated.overlay_nickname, "Alt")
 
+    def test_upsert_persists_tile_position(self) -> None:
+        manager = NativeModeStateManager()
+        with patch("bitcraft_preview.native.state_manager.protect_text", return_value="ENC"):
+            manager.upsert_instance(
+                instance_id="steam6",
+                local_username="bitcraft6",
+                plain_password="pw",
+                tile_position_x=345,
+                tile_position_y=678,
+            )
+
+        saved = manager.get_instance("steam6")
+        self.assertIsNotNone(saved)
+        self.assertEqual(saved.tile_position_x, 345)
+        self.assertEqual(saved.tile_position_y, 678)
+
+    def test_upsert_preserves_tile_position_when_none(self) -> None:
+        manager = NativeModeStateManager()
+        with patch("bitcraft_preview.native.state_manager.protect_text", return_value="ENC"):
+            manager.upsert_instance(
+                instance_id="steam7",
+                local_username="bitcraft7",
+                plain_password="pw",
+                tile_position_x=111,
+                tile_position_y=222,
+            )
+
+        manager.upsert_instance(
+            instance_id="steam7",
+            local_username="bitcraft7",
+            tile_position_x=None,
+            tile_position_y=None,
+            status=None,
+        )
+
+        saved = manager.get_instance("steam7")
+        self.assertIsNotNone(saved)
+        self.assertEqual(saved.tile_position_x, 111)
+        self.assertEqual(saved.tile_position_y, 222)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -43,6 +43,9 @@ class ConfigUpdateTests(unittest.TestCase):
                 self.assertIn("hover_zoom_enabled", loaded["UserSettings"])
                 self.assertIn("switch_window_hotkey", loaded["UserSettings"])
                 self.assertIn("preview_tile_width", loaded["UserSettings"])
+                self.assertIn("overlay_enabled", loaded["UserSettings"])
+                self.assertIn("show_overlay_only_when_focused", loaded["UserSettings"])
+                self.assertIn("save_overlay_position_per_account", loaded["UserSettings"])
                 
                 # Verify old values preserved
                 self.assertEqual(loaded["UserSettings"]["inline_label"], True)
@@ -54,6 +57,9 @@ class ConfigUpdateTests(unittest.TestCase):
                 
                 self.assertIn("hover_zoom_enabled", saved_config["UserSettings"])
                 self.assertIn("switch_window_hotkey", saved_config["UserSettings"])
+                self.assertIn("overlay_enabled", saved_config["UserSettings"])
+                self.assertIn("show_overlay_only_when_focused", saved_config["UserSettings"])
+                self.assertIn("save_overlay_position_per_account", saved_config["UserSettings"])
 
     def test_new_native_mode_option_gets_added(self):
         """When DEFAULT_CONFIG gets a new native_mode option, it should be added."""
@@ -154,7 +160,7 @@ class ConfigUpdateTests(unittest.TestCase):
                     saved_config = json.load(f)
 
                 self.assertIn("gui", saved_config)
-                self.assertEqual(saved_config["gui"]["open_on_startup"], False)
+                self.assertEqual(saved_config["gui"]["open_on_startup"], True)
 
 
 if __name__ == "__main__":

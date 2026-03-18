@@ -74,7 +74,7 @@ def resolve_bulk_launch_targets(all_instance_ids: list[str], selected_ids: set[s
     return [instance_id for instance_id in all_instance_ids if instance_id in selected_ids]
 
 
-def build_instance_update_payload(instance: NativeInstance, nickname: str, entity_id: str) -> dict[str, str | None]:
+def build_instance_update_payload(instance: NativeInstance, nickname: str, entity_id: str) -> dict[str, str | int | None]:
     return {
         "instance_id": instance.instance_id,
         "local_username": instance.local_username,
@@ -87,6 +87,8 @@ def build_instance_update_payload(instance: NativeInstance, nickname: str, entit
         "steam_exe_path": instance.steam_exe_path,
         "steamapps_link_path": instance.steamapps_link_path,
         "steamapps_link_target": instance.steamapps_link_target,
+        "tile_position_x": instance.tile_position_x,
+        "tile_position_y": instance.tile_position_y,
         "status": instance.status,
     }
 

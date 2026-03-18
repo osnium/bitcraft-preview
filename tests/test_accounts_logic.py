@@ -51,6 +51,8 @@ class AccountsLogicTests(unittest.TestCase):
             steam_exe_path=r"C:\BitcraftPreview\SteamInstances\Steam2\steam.exe",
             steamapps_link_path=r"C:\BitcraftPreview\SteamInstances\Steam2\steamapps",
             steamapps_link_target=r"D:\SteamLibrary\steamapps",
+            tile_position_x=900,
+            tile_position_y=450,
             status="ready",
         )
 
@@ -63,6 +65,8 @@ class AccountsLogicTests(unittest.TestCase):
         self.assertEqual(payload["entity_id"], "new-entity")
         self.assertEqual(payload["steam_exe_path"], instance.steam_exe_path)
         self.assertEqual(payload["steamapps_link_target"], instance.steamapps_link_target)
+        self.assertEqual(payload["tile_position_x"], 900)
+        self.assertEqual(payload["tile_position_y"], 450)
         self.assertEqual(payload["status"], "ready")
 
 

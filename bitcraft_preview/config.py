@@ -15,10 +15,13 @@ DEFAULT_CONFIG = {
     "mode": "sandboxie",
     "UserSettings": {
         "inline_label": True,                 # Needs Restart
+        "overlay_enabled": True,              # Live
         "preview_opacity": 0.8,               # Live
         "hover_zoom_enabled": True,           # Live
         "hover_zoom_percent": 200,            # Live (100-500)
         "hide_active_window_overlay": False,  # Live
+        "show_overlay_only_when_focused": False,  # Live
+        "save_overlay_position_per_account": True,  # Live
         "switch_window_enabled": True,        # Live
         "switch_window_hotkey": "MOUSE5",    # Live
         "preview_tile_width": 300,            # Live
@@ -214,9 +217,14 @@ INLINE_LABEL = _current_config["UserSettings"]["inline_label"]
 
 # Real-time getters for settings that should be checked actively
 def get_preview_opacity(): return load_config()["UserSettings"]["preview_opacity"]
+def get_overlay_enabled(): return bool(load_config()["UserSettings"].get("overlay_enabled", True))
 def get_hover_zoom_enabled(): return load_config()["UserSettings"]["hover_zoom_enabled"]
 def get_hover_zoom_percent(): return load_config()["UserSettings"]["hover_zoom_percent"]
 def get_hide_active_window_overlay(): return load_config()["UserSettings"]["hide_active_window_overlay"]
+def get_show_overlay_only_when_focused():
+    return bool(load_config()["UserSettings"].get("show_overlay_only_when_focused", False))
+def get_save_overlay_position_per_account():
+    return bool(load_config()["UserSettings"].get("save_overlay_position_per_account", True))
 def get_switch_window_enabled():
     value = load_config()["UserSettings"].get("switch_window_enabled", True)
     if isinstance(value, bool):

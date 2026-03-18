@@ -39,6 +39,8 @@ class NativeInstance:
     steam_exe_path: str = ""
     steamapps_link_path: str = ""
     steamapps_link_target: str = ""
+    tile_position_x: int = 0
+    tile_position_y: int = 0
     status: str = "provisioning"
 
 
@@ -132,6 +134,8 @@ class NativeModeStateManager:
         steam_exe_path: str | None = None,
         steamapps_link_path: str | None = None,
         steamapps_link_target: str | None = None,
+        tile_position_x: int | None = None,
+        tile_position_y: int | None = None,
         status: str | None = "ready",
     ) -> NativeInstance:
         cfg = self.load_config()
@@ -160,6 +164,8 @@ class NativeModeStateManager:
             steam_exe_path=existing.get("steam_exe_path", "") if steam_exe_path is None else steam_exe_path,
             steamapps_link_path=existing.get("steamapps_link_path", "") if steamapps_link_path is None else steamapps_link_path,
             steamapps_link_target=existing.get("steamapps_link_target", "") if steamapps_link_target is None else steamapps_link_target,
+            tile_position_x=int(existing.get("tile_position_x", 0)) if tile_position_x is None else int(tile_position_x),
+            tile_position_y=int(existing.get("tile_position_y", 0)) if tile_position_y is None else int(tile_position_y),
             status=existing.get("status", "provisioning") if status is None else status,
         )
 

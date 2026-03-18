@@ -74,35 +74,53 @@ class SettingsPanel(QWidget):
         )
         overlay_layout.addWidget(self.hide_active_overlay, 1, 0, 1, 3)
 
+        self.overlay_enabled = QCheckBox("Enable overlay preview")
+        self.overlay_enabled.stateChanged.connect(
+            lambda: self._set_user_bool("overlay_enabled", self.overlay_enabled.isChecked())
+        )
+        overlay_layout.addWidget(self.overlay_enabled, 2, 0, 1, 3)
+
+        self.focus_only_overlay = QCheckBox("Show overlay only when BitCraft is focused")
+        self.focus_only_overlay.stateChanged.connect(
+            lambda: self._set_user_bool("show_overlay_only_when_focused", self.focus_only_overlay.isChecked())
+        )
+        overlay_layout.addWidget(self.focus_only_overlay, 3, 0, 1, 3)
+
+        self.save_position_overlay = QCheckBox("Save overlay position per account")
+        self.save_position_overlay.stateChanged.connect(
+            lambda: self._set_user_bool("save_overlay_position_per_account", self.save_position_overlay.isChecked())
+        )
+        overlay_layout.addWidget(self.save_position_overlay, 4, 0, 1, 3)
+
         self.hover_zoom_enabled = QCheckBox("Enable hover zoom")
         self.hover_zoom_enabled.stateChanged.connect(
             lambda: self._set_user_bool("hover_zoom_enabled", self.hover_zoom_enabled.isChecked())
         )
-        overlay_layout.addWidget(self.hover_zoom_enabled, 2, 0, 1, 3)
+        overlay_layout.addWidget(self.hover_zoom_enabled, 5, 0, 1, 3)
 
         self.hover_zoom_name = QLabel("Hover zoom percent")
         self.hover_zoom_value = QLabel("200%")
         self.hover_zoom_percent = DirectInputSlider("Hover zoom percent", " %", self)
         self.hover_zoom_percent.setRange(100, 500)
         self.hover_zoom_percent.valueChanged.connect(self._on_zoom_changed)
-        self._add_inline_slider_row(overlay_layout, 3, self.hover_zoom_name, self.hover_zoom_percent, self.hover_zoom_value)
+        self._add_inline_slider_row(overlay_layout, 6, self.hover_zoom_name, self.hover_zoom_percent, self.hover_zoom_value)
 
         self.preview_tile_width_name = QLabel("Tile width")
         self.preview_tile_width_value = QLabel("300")
         self.preview_tile_width = DirectInputSlider("Tile width", " px", self)
         self.preview_tile_width.setRange(100, 500)
         self.preview_tile_width.valueChanged.connect(self._on_tile_size_changed)
-        self._add_inline_slider_row(overlay_layout, 4, self.preview_tile_width_name, self.preview_tile_width, self.preview_tile_width_value)
+        self._add_inline_slider_row(overlay_layout, 7, self.preview_tile_width_name, self.preview_tile_width, self.preview_tile_width_value)
 
         self.preview_tile_height_name = QLabel("Tile height")
         self.preview_tile_height_value = QLabel("200")
         self.preview_tile_height = DirectInputSlider("Tile height", " px", self)
         self.preview_tile_height.setRange(60, 500)
         self.preview_tile_height.valueChanged.connect(self._on_tile_size_changed)
-        self._add_inline_slider_row(overlay_layout, 5, self.preview_tile_height_name, self.preview_tile_height, self.preview_tile_height_value)
+        self._add_inline_slider_row(overlay_layout, 8, self.preview_tile_height_name, self.preview_tile_height, self.preview_tile_height_value)
 
         self.tile_preview = TilePreviewWidget(self)
-        overlay_layout.addWidget(self.tile_preview, 6, 0, 1, 3)
+        overlay_layout.addWidget(self.tile_preview, 9, 0, 1, 3)
 
         hotkey_content = QWidget(self)
         hotkey_layout = QGridLayout(hotkey_content)
@@ -167,6 +185,9 @@ class SettingsPanel(QWidget):
         self.hover_zoom_value.setText(f"{hover_zoom}%")
 
         self.hide_active_overlay.setChecked(bool(user.get("hide_active_window_overlay", False)))
+        self.overlay_enabled.setChecked(bool(user.get("overlay_enabled", True)))
+        self.focus_only_overlay.setChecked(bool(user.get("show_overlay_only_when_focused", False)))
+        self.save_position_overlay.setChecked(bool(user.get("save_overlay_position_per_account", True)))
         self.switch_window_enabled.setChecked(bool(user.get("switch_window_enabled", True)))
 
         hotkey = str(user.get("switch_window_hotkey", "MOUSE5") or "MOUSE5")
