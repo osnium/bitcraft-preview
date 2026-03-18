@@ -1,20 +1,26 @@
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QGraphicsDropShadowEffect
-from PySide6.QtCore import Qt, QPoint, QRect
+from PySide6.QtCore import Qt, QPoint, QRect, Signal
 from PySide6.QtGui import QPainterPath, QRegion, QPainter, QColor
 import ctypes
 from bitcraft_preview.win32.dwm_thumbnail import register_thumbnail, update_thumbnail, unregister_thumbnail
 from bitcraft_preview.win32.activation import activate_window
 from bitcraft_preview.config import INLINE_LABEL, get_preview_opacity, get_hover_zoom_enabled, get_hover_zoom_percent, get_preview_tile_width, get_preview_tile_height
 
-LABEL_OPACITY_BOOST = 0.20
+user32 = ctypes.windll.user32
+SWP_NOSIZE = 0x0001
+SWP_NOMOVE = 0x0002
+SWP_NOACTIVATE = 0x0010
 
 class LivePreviewTile(QWidget):
+    position_changed = Signal(int, int)
+
     def __init__(self, target_hwnd: int, label_text: str, parent=None):
         super().__init__(parent)
         self.target_hwnd = target_hwnd
         self.label_text = label_text
         self.thumbnail_handle = None
         self.dragging = False
+        self._drag_moved = False
         self.drag_start_position = None
         self.window_start_position = None
         self.is_hovered = False
@@ -78,12 +84,7 @@ class LivePreviewTile(QWidget):
         return max(0.0, min(1.0, float(value)))
 
     def _compute_label_opacity(self) -> float:
-        preview_opacity = self._clamp_opacity(get_preview_opacity())
-        if preview_opacity <= 0.0:
-            return 0.0
-        if preview_opacity >= 1.0:
-            return 1.0
-        return self._clamp_opacity(preview_opacity + LABEL_OPACITY_BOOST)
+        return 1.0
 
     def _refresh_label_visuals(self):
         label_opacity = self._compute_label_opacity()
@@ -124,6 +125,7 @@ class LivePreviewTile(QWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.dragging = True
+            self._drag_moved = False
             self.drag_start_position = event.globalPosition().toPoint()
             self.window_start_position = self.frameGeometry().topLeft()
             
@@ -136,6 +138,8 @@ class LivePreviewTile(QWidget):
     def mouseMoveEvent(self, event):
         if self.dragging:
             delta = event.globalPosition().toPoint() - self.drag_start_position
+            if delta.manhattanLength() > 0:
+                self._drag_moved = True
             new_pos = self.window_start_position + delta
             self.move(new_pos)
             
@@ -161,8 +165,12 @@ class LivePreviewTile(QWidget):
             self.dragging = False
             # Check if it was a fast click vs a drag
             delta = event.globalPosition().toPoint() - self.drag_start_position
+            if self._drag_moved:
+                pos = self.frameGeometry().topLeft()
+                self.position_changed.emit(int(pos.x()), int(pos.y()))
             if delta.manhattanLength() < 5:
                 activate_window(self.target_hwnd)
+            self._drag_moved = False
             event.accept()
 
 
@@ -173,7 +181,7 @@ class LivePreviewTile(QWidget):
         # Always bring hovered window completely to top so it's over other preview tiles!
         self.raise_()
         if INLINE_LABEL and hasattr(self, 'label') and self.label:
-            self.label.raise_()
+            self._sync_inline_label_window(ensure_visible=True)
         
         if self.dragging:
             return
@@ -259,12 +267,39 @@ class LivePreviewTile(QWidget):
         self.update_thumbnail_rect()
         self._refresh_label_visuals()
 
+    def _stack_inline_label_above_tile(self):
+        if not INLINE_LABEL or not self.label.isVisible():
+            return
+
+        try:
+            label_hwnd = int(self.label.winId())
+            tile_hwnd = int(self.winId())
+        except (TypeError, ValueError, RuntimeError):
+            self.label.raise_()
+            return
+
+        flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+        if not user32.SetWindowPos(tile_hwnd, label_hwnd, 0, 0, 0, 0, flags):
+            self.label.raise_()
+
+    def _sync_inline_label_window(self, ensure_visible: bool = False):
+        if not INLINE_LABEL or not hasattr(self, 'label') or self.label is None:
+            return
+        if not self.isVisible():
+            return
+
+        if ensure_visible and not self.label.isVisible():
+            self.label.show()
+
+        if not self.label.isVisible():
+            return
+
+        bottom_left = self.mapToGlobal(QPoint(10, self.height() - self.label.height() - 10))
+        self.label.move(bottom_left)
+        self._stack_inline_label_above_tile()
+
     def update_inline_label_position(self):
-        if INLINE_LABEL and self.label.isVisible():
-            # mapToGlobal converts local logical coords to global logical screen coords,
-            # which is what move() on a parentless top-level window expects.
-            bottom_left = self.mapToGlobal(QPoint(10, self.height() - self.label.height() - 10))
-            self.label.move(bottom_left)
+        self._sync_inline_label_window()
 
     def sync_size(self):
         """Called each refresh tick to apply live config size changes."""
@@ -284,8 +319,7 @@ class LivePreviewTile(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         if INLINE_LABEL:
-            self.label.show()
-            self.update_inline_label_position()
+            self._sync_inline_label_window(ensure_visible=True)
             
         if not self.thumbnail_handle:
             win_id = int(self.winId())
