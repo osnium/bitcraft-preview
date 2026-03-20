@@ -7,6 +7,7 @@ from bitcraft_preview.win32.activation import activate_window
 from bitcraft_preview.config import INLINE_LABEL, get_preview_opacity, get_hover_zoom_enabled, get_hover_zoom_percent, get_preview_tile_width, get_preview_tile_height
 
 user32 = ctypes.windll.user32
+HWND_TOPMOST = -1
 SWP_NOSIZE = 0x0001
 SWP_NOMOVE = 0x0002
 SWP_NOACTIVATE = 0x0010
@@ -177,11 +178,12 @@ class LivePreviewTile(QWidget):
     def enterEvent(self, event):
         super().enterEvent(event)
         self.is_hovered = True
-        
-        # Always bring hovered window completely to top so it's over other preview tiles!
-        self.raise_()
+
+        # Hovered tiles must move above the rest of the overlay stack.
         if INLINE_LABEL and hasattr(self, 'label') and self.label:
-            self._sync_inline_label_window(ensure_visible=True)
+            self._sync_inline_label_window(ensure_visible=True, bring_to_foreground=True)
+        else:
+            self._bring_to_foreground()
         
         if self.dragging:
             return
@@ -282,7 +284,39 @@ class LivePreviewTile(QWidget):
         if not user32.SetWindowPos(tile_hwnd, label_hwnd, 0, 0, 0, 0, flags):
             self.label.raise_()
 
-    def _sync_inline_label_window(self, ensure_visible: bool = False):
+    def _bring_to_foreground(self):
+        flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+
+        try:
+            tile_hwnd = int(self.winId())
+        except (TypeError, ValueError, RuntimeError):
+            self.raise_()
+            if INLINE_LABEL and hasattr(self, 'label') and self.label:
+                self.label.raise_()
+            return
+
+        if INLINE_LABEL and hasattr(self, 'label') and self.label and self.label.isVisible():
+            try:
+                label_hwnd = int(self.label.winId())
+            except (TypeError, ValueError, RuntimeError):
+                self.raise_()
+                self.label.raise_()
+                return
+
+            if user32.SetWindowPos(label_hwnd, HWND_TOPMOST, 0, 0, 0, 0, flags):
+                if not user32.SetWindowPos(tile_hwnd, label_hwnd, 0, 0, 0, 0, flags):
+                    self.raise_()
+                    self.label.raise_()
+                return
+
+            self.raise_()
+            self.label.raise_()
+            return
+
+        if not user32.SetWindowPos(tile_hwnd, HWND_TOPMOST, 0, 0, 0, 0, flags):
+            self.raise_()
+
+    def _sync_inline_label_window(self, ensure_visible: bool = False, bring_to_foreground: bool = False):
         if not INLINE_LABEL or not hasattr(self, 'label') or self.label is None:
             return
         if not self.isVisible():
@@ -296,7 +330,10 @@ class LivePreviewTile(QWidget):
 
         bottom_left = self.mapToGlobal(QPoint(10, self.height() - self.label.height() - 10))
         self.label.move(bottom_left)
-        self._stack_inline_label_above_tile()
+        if bring_to_foreground:
+            self._bring_to_foreground()
+        else:
+            self._stack_inline_label_above_tile()
 
     def update_inline_label_position(self):
         self._sync_inline_label_window()
