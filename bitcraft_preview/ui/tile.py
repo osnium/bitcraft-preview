@@ -4,7 +4,7 @@ from PySide6.QtGui import QPainterPath, QRegion, QPainter, QColor
 import ctypes
 from bitcraft_preview.win32.dwm_thumbnail import register_thumbnail, update_thumbnail, unregister_thumbnail
 from bitcraft_preview.win32.activation import activate_window
-from bitcraft_preview.config import INLINE_LABEL, get_preview_opacity, get_hover_zoom_enabled, get_hover_zoom_percent, get_preview_tile_width, get_preview_tile_height
+from bitcraft_preview.config import INLINE_LABEL, get_lock_overlay_tiles, get_preview_opacity, get_hover_zoom_enabled, get_hover_zoom_percent, get_preview_tile_width, get_preview_tile_height
 
 user32 = ctypes.windll.user32
 HWND_TOPMOST = -1
@@ -125,10 +125,10 @@ class LivePreviewTile(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.dragging = True
             self._drag_moved = False
             self.drag_start_position = event.globalPosition().toPoint()
             self.window_start_position = self.frameGeometry().topLeft()
+            self.dragging = not get_lock_overlay_tiles()
             
             if get_hover_zoom_enabled() and self.zoomed_in:
                 self._unzoom()
@@ -137,7 +137,7 @@ class LivePreviewTile(QWidget):
             event.accept()
 
     def mouseMoveEvent(self, event):
-        if self.dragging:
+        if self.dragging and self.drag_start_position is not None and self.window_start_position is not None:
             delta = event.globalPosition().toPoint() - self.drag_start_position
             if delta.manhattanLength() > 0:
                 self._drag_moved = True
@@ -165,13 +165,17 @@ class LivePreviewTile(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self.dragging = False
             # Check if it was a fast click vs a drag
-            delta = event.globalPosition().toPoint() - self.drag_start_position
+            delta = QPoint()
+            if self.drag_start_position is not None:
+                delta = event.globalPosition().toPoint() - self.drag_start_position
             if self._drag_moved:
                 pos = self.frameGeometry().topLeft()
                 self.position_changed.emit(int(pos.x()), int(pos.y()))
             if delta.manhattanLength() < 5:
                 activate_window(self.target_hwnd)
             self._drag_moved = False
+            self.drag_start_position = None
+            self.window_start_position = None
             event.accept()
 
 

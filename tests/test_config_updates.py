@@ -44,6 +44,7 @@ class ConfigUpdateTests(unittest.TestCase):
                 self.assertIn("switch_window_hotkey", loaded["UserSettings"])
                 self.assertIn("preview_tile_width", loaded["UserSettings"])
                 self.assertIn("overlay_enabled", loaded["UserSettings"])
+                self.assertIn("lock_overlay_tiles", loaded["UserSettings"])
                 self.assertIn("show_overlay_only_when_focused", loaded["UserSettings"])
                 self.assertIn("save_overlay_position_per_account", loaded["UserSettings"])
                 
@@ -58,6 +59,7 @@ class ConfigUpdateTests(unittest.TestCase):
                 self.assertIn("hover_zoom_enabled", saved_config["UserSettings"])
                 self.assertIn("switch_window_hotkey", saved_config["UserSettings"])
                 self.assertIn("overlay_enabled", saved_config["UserSettings"])
+                self.assertIn("lock_overlay_tiles", saved_config["UserSettings"])
                 self.assertIn("show_overlay_only_when_focused", saved_config["UserSettings"])
                 self.assertIn("save_overlay_position_per_account", saved_config["UserSettings"])
 

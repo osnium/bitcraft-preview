@@ -16,6 +16,7 @@ DEFAULT_CONFIG = {
     "UserSettings": {
         "inline_label": True,                 # Needs Restart
         "overlay_enabled": True,              # Live
+        "lock_overlay_tiles": False,         # Live
         "preview_opacity": 0.8,               # Live
         "hover_zoom_enabled": True,           # Live
         "hover_zoom_percent": 200,            # Live (100-500)
@@ -218,6 +219,7 @@ INLINE_LABEL = _current_config["UserSettings"]["inline_label"]
 # Real-time getters for settings that should be checked actively
 def get_preview_opacity(): return load_config()["UserSettings"]["preview_opacity"]
 def get_overlay_enabled(): return bool(load_config()["UserSettings"].get("overlay_enabled", True))
+def get_lock_overlay_tiles(): return bool(load_config()["UserSettings"].get("lock_overlay_tiles", False))
 def get_hover_zoom_enabled(): return load_config()["UserSettings"]["hover_zoom_enabled"]
 def get_hover_zoom_percent(): return load_config()["UserSettings"]["hover_zoom_percent"]
 def get_hide_active_window_overlay(): return load_config()["UserSettings"]["hide_active_window_overlay"]
